@@ -2,6 +2,8 @@
 
 #include <shroudtopia.h>
 #include <memory_utils.h>
+#include <cstring>
+#include <vector>
 
 #define LOG_CLASS(msg) modContext->Log(std::string(typeid(*this).name()).append(msg).c_str())
 
@@ -58,35 +60,64 @@ public:
 	}
 };
 
+// Stamina is an int attribute looked up by hash (mov edx, 0x04B6AA8B). Every
+// place that spends it does "add rX, rY; sub dword [rX + idx*4], reg" shortly
+// after the lookup. NOP those subtractions; regeneration and resets still run.
+// Found with hardware watchpoints on build 25988036 (sprint, jump/attack paths).
 class NoStaminaLoss : public _Mod
 {
+	std::vector<Mem::Patch*> patches;
 public:
 	NoStaminaLoss(ModContext* modContext) : _Mod(modContext)
 	{
-		// AOB: 8B 04 91 89 44 24 40
-		const char* pattern = "\x8B\x04\x91\x89\x44\x24\x40";
-		const char* mask = "xxxxxxx";
-		uintptr_t baseAddress = (uintptr_t)GetModuleHandle(NULL);
-		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, GameImageSize());
-
-		if (address)
+		auto image = reinterpret_cast<const uint8_t*>(GetModuleHandle(NULL));
+		const size_t size = GameImageSize();
+		const uint8_t lookup[] = { 0xBA, 0x8B, 0xAA, 0xB6, 0x04 }; // mov edx, StaminaHash
+		for (size_t s = 0x1000; s + 0x90 < size; ++s)
 		{
-			uint8_t modCode[] = {
-				0x53,                               // push rbx
-				0x8B, 0x5C, 0x91, 0x08,             // mov ebx, [rcx+rdx*4+08] (Max Stamina)
-				0x89, 0x1C, 0x91,                   // mov [rcx+rdx*4], ebx    (Set Current to Max)
-				0x5B,                               // pop rbx
-				0x8B, 0x04, 0x91,                   // mov eax, [rcx+rdx*4]
-				0x89, 0x44, 0x24, 0x40,             // mov [rsp+40], eax
-				0xE9, 0x00, 0x00, 0x00, 0x00        // jmp return
-			};
-
-			mod = new Mem::Detour(address, modCode, sizeof(modCode), false, 2);
-			mod->shellcode->updateValue<uint32_t>(
-				sizeof(modCode) - 4, (uint32_t)(mod->patch->data->address + mod->patch->data->size)
-				- ((uint32_t)((uintptr_t)mod->shellcode->data->address + mod->shellcode->data->size))
-			);
+			if (std::memcmp(image + s, lookup, sizeof(lookup)) != 0)
+				continue;
+			for (size_t i = s + sizeof(lookup); i < s + 0x80; ++i)
+			{
+				size_t j = i;
+				if (image[j] >= 0x40 && image[j] <= 0x4F) ++j;             // optional REX
+				const bool sub = image[j] == 0x29 && (image[j + 1] & 0xC7) == 0x04 && // sub [sib], r32
+					(image[j + 2] >> 6) == 2 && (image[j + 2] & 7) != 5;            // scale 4, no disp
+				const bool addBefore = image[i - 3] >= 0x48 && image[i - 3] <= 0x4F &&
+					image[i - 2] == 0x03 && (image[i - 1] >> 6) == 3;              // add r64, r64
+				if (!sub || !addBefore)
+					continue;
+				uint8_t nop3[] = { 0x0F, 0x1F, 0x00 };
+				uint8_t nop4[] = { 0x0F, 0x1F, 0x40, 0x00 };
+				const size_t len = j + 3 - i;
+				patches.push_back(new Mem::Patch((uintptr_t)(image + i), len == 4 ? nop4 : nop3, len));
+				break;
+			}
 		}
+		LOG_CLASS(std::string(" found ").append(std::to_string(patches.size())).append(" stamina spend sites").c_str());
+	}
+
+	~NoStaminaLoss()
+	{
+		for (auto p : patches) { p->undo(); delete p; }
+	}
+
+	void activate()
+	{
+		if (patches.empty()) {
+			LOG_CLASS(" no stamina spend sites found, not activated");
+			return;
+		}
+		for (auto p : patches) p->apply();
+		active = true;
+		LOG_CLASS("Activated");
+	}
+
+	void deactivate()
+	{
+		for (auto p : patches) p->undo();
+		active = false;
+		LOG_CLASS("Deactivated");
 	}
 };
 
