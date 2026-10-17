@@ -327,10 +327,10 @@ bool ModContext_InjectShellcode(uint8_t* opcode, size_t opcodeSize, uintptr_t ne
     if (injectedAt) *injectedAt = shellcode.data->address;
     if (shellcode.inject()) {
         ModLog(std::string("Successfully injected shellcode at address: ").append(std::to_string(shellcode.data->address)).c_str());
+        return true;
     }
-    else {
-        ModLog("Failed to inject shellcode");
-    }
+    ModLog("Failed to inject shellcode");
+    return false;
 }
 
 bool ModContext_CreateDetour(LPVOID targetFunction, LPVOID detourFunction, void** trampoline = nullptr) {
