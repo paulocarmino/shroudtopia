@@ -121,6 +121,50 @@ public:
 	}
 };
 
+// The floating stamina gauge next to the character keeps appearing while
+// sprinting even when stamina never drops. Skip the HUD call that draws it
+// (the floating resource widget, second call in the screen-space HUD pass).
+class HideStaminaGauge : public _Mod
+{
+	Mem::Patch* patch = nullptr;
+public:
+	HideStaminaGauge(ModContext* modContext) : _Mod(modContext)
+	{
+		// movaps [rbp+20..60], xmm2/3/4/7/6; call DrawFloatingResourceWidget
+		const char* pattern = "\x0F\x29\x55\x20\x0F\x29\x5D\x30\x0F\x29\x65\x40\x0F\x29\x7D\x50\x0F\x29\x75\x60\xE8";
+		const char* mask = "xxxxxxxxxxxxxxxxxxxxx";
+		uintptr_t baseAddress = (uintptr_t)GetModuleHandle(NULL);
+		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, GameImageSize());
+		if (address)
+		{
+			uint8_t nop5[] = { 0x0F, 0x1F, 0x44, 0x00, 0x00 };
+			patch = new Mem::Patch(address + 20, nop5, sizeof(nop5));
+		}
+	}
+
+	~HideStaminaGauge()
+	{
+		if (patch) { patch->undo(); delete patch; }
+	}
+
+	void activate()
+	{
+		if (!patch) {
+			LOG_CLASS(" pattern not found, not activated");
+			return;
+		}
+		active = patch->apply();
+		LOG_CLASS(active ? "Activated" : "Failed to activate");
+	}
+
+	void deactivate()
+	{
+		if (patch) patch->undo();
+		active = false;
+		LOG_CLASS("Deactivated");
+	}
+};
+
 class NoFallDamage : public _Mod
 {
 public:
@@ -343,6 +387,7 @@ class BasicsMod : public Mod
 {
 	NoStaminaLoss* noStaminaLoss;
 	NoFallDamage* noFallDamage;
+	HideStaminaGauge* hideStaminaGauge;
 	InfiniteItemUse* infiniteItemUse;
 	NoResourceCost* noResourceCost;
 	UnlockBlueprints* unlockBlueprints;
@@ -353,6 +398,7 @@ public:
 	{
 		noStaminaLoss = new NoStaminaLoss(modContext);
 		noFallDamage = new NoFallDamage(modContext);
+		hideStaminaGauge = new HideStaminaGauge(modContext);
 		noResourceCost = new NoResourceCost(modContext);
 		infiniteItemUse = new InfiniteItemUse(modContext);
 		unlockBlueprints = new UnlockBlueprints(modContext);
@@ -362,6 +408,7 @@ public:
 	void Unload(ModContext* modContext) {
 		delete noStaminaLoss;
 		delete noFallDamage;
+		delete hideStaminaGauge;
 		delete noResourceCost;
 		delete infiniteItemUse;
 		delete unlockBlueprints;
@@ -376,6 +423,7 @@ public:
 	void Deactivate(ModContext* modContext) {
 		if (noStaminaLoss->active) noStaminaLoss->deactivate();
 		if (noFallDamage->active) noFallDamage->deactivate();
+		if (hideStaminaGauge->active) hideStaminaGauge->deactivate();
 		if (noResourceCost->active) noResourceCost->deactivate();
 		if (infiniteItemUse->active) infiniteItemUse->deactivate();
 		if (unlockBlueprints->active) unlockBlueprints->deactivate();
@@ -391,6 +439,12 @@ public:
 			noStaminaLoss->activate();
 		else if (!noStaminaLossEnabled && noStaminaLoss->active)
 			noStaminaLoss->deactivate();
+
+		bool hideStaminaGaugeEnabled = modContext->config.GetBool(modKey, "hide_stamina_gauge", false);
+		if (hideStaminaGaugeEnabled && !hideStaminaGauge->active)
+			hideStaminaGauge->activate();
+		else if (!hideStaminaGaugeEnabled && hideStaminaGauge->active)
+			hideStaminaGauge->deactivate();
 
 		bool noFallDamageEnabled = modContext->config.GetBool(modKey, "no_fall_damage", false);
 		if (noFallDamageEnabled && !noFallDamage->active)
