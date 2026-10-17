@@ -189,8 +189,9 @@ public:
 		}
 	}
 
-	// Not found on build 25988036: the item consumption code no longer
-	// contains this signature, so activation is skipped by _Mod.
+	// Not found on build 25988036. Item consumption (potions, food, ammo and
+	// crafting materials) now goes through the generic remove-items function
+	// that NoResourceCost patches, so enable "_no_resource_cost" instead.
 };
 
 class NoResourceCost : public _Mod
