@@ -45,24 +45,24 @@ int main()
     const uintptr_t descriptor[] = { base + CameraSystemName, sizeof(name) - 1, base + CameraSystemFunction };
     std::memcpy(image.data() + CameraSystemName, name, sizeof(name));
     std::memcpy(image.data() + CameraSystemDescriptor, descriptor, sizeof(descriptor));
-    const std::uint8_t call[] = { 0xE8, 0x38, 0x38, 0xA5, 0x00 };
+    const std::uint8_t call[] = { 0xE8, 0x99, 0xC7, 0xBC, 0x00 };
     const std::uint8_t entry[] = { 0x48,0x8B,0xC4,0x48,0x89,0x58,0x08,0x48,0x89,0x78,0x10,0x55,0x48,0x8D,0x68,0xA1 };
-    const std::uint8_t distance[] = { 0xF3,0x0F,0x10,0xA3,0xF0,0x0E,0,0 };
+    const std::uint8_t distance[] = { 0xF3,0x0F,0x10,0xA3,0xA4,0x14,0,0 };
     std::memcpy(image.data() + CameraTransformCall, call, sizeof(call));
     std::memcpy(image.data() + CameraTransformFunction, entry, sizeof(entry));
-    std::memcpy(image.data() + 0xCB9E21, distance, sizeof(distance));
+    std::memcpy(image.data() + CameraDistanceRead, distance, sizeof(distance));
     Check(FindTarget(image.data()).address == base + CameraTransformCall, "resolve verified current camera call");
     image[CameraSystemFunction] = 0xE9;
-    Check(FindTarget(image.data()).kind == HookKind::Client1076226, "coexist with minimap entry detour");
+    Check(FindTarget(image.data()).kind == HookKind::CurrentClient, "coexist with minimap entry detour");
     image[CameraSystemName] = 'X';
     Check(FindTarget(image.data()).kind == HookKind::Unsupported, "reject wrong named system");
     image[CameraSystemName] = 'p';
     image[CameraTransformCall] = 0xE9;
     Check(FindTarget(image.data()).kind == HookKind::Unsupported, "reject already modified camera call");
     image[CameraTransformCall] = 0xE8;
-    image[0xCB9E21 + 4] = 0xF4;
+    image[CameraDistanceRead + 4] = 0xF4;
     Check(FindTarget(image.data()).kind == HookKind::Unsupported, "reject changed camera field layout");
-    image[0xCB9E21 + 4] = 0xF0;
+    image[CameraDistanceRead + 4] = 0xA4;
     nt->FileHeader.TimeDateStamp = 0;
     Check(FindTarget(image.data()).kind == HookKind::Unsupported, "reject unrecognized client without legacy hook");
 
@@ -120,16 +120,16 @@ int main()
     Check(executable != nullptr, "allocate synthetic camera code");
     const std::uint8_t caller[] = { 0x48,0x83,0xEC,0x28,0xE8,0,0,0,0,0x48,0x83,0xC4,0x28,0xC3 };
     const std::uint8_t callee[] = {
-        0xF3,0x0F,0x10,0x82,0xD4,0x0E,0,0,0xF3,0x0F,0x11,0x01,
-        0xF3,0x0F,0x10,0x82,0xF0,0x0E,0,0,0xF3,0x0F,0x11,0x41,0x04,
-        0xF3,0x0F,0x10,0x82,0xD8,0x0E,0,0,0xF3,0x0F,0x11,0x41,0x08,0xC3
+        0xF3,0x0F,0x10,0x82,0x8C,0x14,0,0,0xF3,0x0F,0x11,0x01,
+        0xF3,0x0F,0x10,0x82,0xA4,0x14,0,0,0xF3,0x0F,0x11,0x41,0x04,
+        0xF3,0x0F,0x10,0x82,0x90,0x14,0,0,0xF3,0x0F,0x11,0x41,0x08,0xC3
     };
     std::memcpy(executable, caller, sizeof(caller));
     std::memcpy(executable + 0x100, callee, sizeof(callee));
     const std::int32_t originalDelta = 0x100 - 9;
     std::memcpy(executable + 5, &originalDelta, sizeof(originalDelta));
     FlushInstructionCache(GetCurrentProcess(), executable, 0x1000);
-    std::vector<std::uint8_t> camera(0x1000, 0xA5);
+    std::vector<std::uint8_t> camera(0x2000, 0xA5);
     StoreFloat(camera, ShoulderOffset, 0.6f);
     StoreFloat(camera, DistanceOffset, 4.0f);
     StoreFloat(camera, ShoulderOffset + 4, 1.5f);

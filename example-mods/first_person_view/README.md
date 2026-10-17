@@ -1,6 +1,6 @@
 # First-person view
 
-Restores the first-person camera on Steam client data revision 1076226. The
+Restores the first-person camera on Steam build 25988036 (October 2026). The
 original camera signature is absent on this client, and the old activation path
 could dereference an uninitialized hook when no match was found.
 
@@ -37,14 +37,14 @@ Replacing the DLL requires a game restart.
 
 ## Camera hook
 
-The current-client path verifies PE timestamp 1782724296, image size 0x2DA7000,
+The current-client path verifies PE timestamp 1792148057, image size 0x2A1A000,
 the named `player_camera_transform` registry descriptor, the original call and
 callee entry, and the camera-distance field read.
 
-The local-player camera system at RVA 0x2662A0 calls the native transform at
-0xCB9C10 from 0x2663D3. At that call, RDX points to `LocalPlayerCamera` and RCX to
-the output transform. The wrapper sets the horizontal offset at +0xED4 to zero
-and the distance at +0xEF0 to the configured value, then calls the native
+The local-player camera system at RVA 0x2B29C0 calls the native transform at
+0xE7F290 from 0x2B2AF2. At that call, RDX points to `LocalPlayerCamera` and RCX to
+the output transform. The wrapper sets the horizontal offset at +0x148C to zero
+and the distance at +0x14A4 to the configured value, then calls the native
 calculation. Pivot height, FOV and orientation stay under the game's control.
 
 The minimap hooks the system entry. This mod patches the separate interior call,

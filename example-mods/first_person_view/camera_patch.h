@@ -9,15 +9,16 @@
 
 namespace FirstPerson
 {
-    constexpr std::uint32_t ClientTimestamp = 1782724296;
-    constexpr std::size_t ClientImageSize = 0x2DA7000;
-    constexpr std::size_t CameraSystemDescriptor = 0x1D43630;
-    constexpr std::size_t CameraSystemName = 0x1D443E0;
-    constexpr std::size_t CameraSystemFunction = 0x2662A0;
-    constexpr std::size_t CameraTransformCall = 0x2663D3;
-    constexpr std::size_t CameraTransformFunction = 0xCB9C10;
-    constexpr std::size_t ShoulderOffset = 0xED4;
-    constexpr std::size_t DistanceOffset = 0xEF0;
+    constexpr std::uint32_t ClientTimestamp = 1792148057;
+    constexpr std::size_t ClientImageSize = 0x2A1A000;
+    constexpr std::size_t CameraSystemDescriptor = 0x1E02290;
+    constexpr std::size_t CameraSystemName = 0x1E031F0;
+    constexpr std::size_t CameraSystemFunction = 0x2B29C0;
+    constexpr std::size_t CameraTransformCall = 0x2B2AF2;
+    constexpr std::size_t CameraTransformFunction = 0xE7F290;
+    constexpr std::size_t CameraDistanceRead = 0xE7F4A1;
+    constexpr std::size_t ShoulderOffset = 0x148C;
+    constexpr std::size_t DistanceOffset = 0x14A4;
     constexpr float FirstPersonDistance = -0.15f;
     constexpr std::size_t StubCallDisplacement = 25;
     constexpr std::size_t StubReturnDisplacement = 30;
@@ -28,7 +29,7 @@ namespace FirstPerson
         return std::isfinite(distance) && distance >= -0.5f && distance <= 0.5f;
     }
 
-    enum class HookKind { Unsupported, Legacy, Client1076226 };
+    enum class HookKind { Unsupported, Legacy, CurrentClient };
     struct HookTarget
     {
         HookKind kind = HookKind::Unsupported;
@@ -63,22 +64,22 @@ namespace FirstPerson
             const char name[] = "player_camera_transform";
             uintptr_t descriptor[3] = {};
             std::memcpy(descriptor, image + CameraSystemDescriptor, sizeof(descriptor));
-            const std::array<std::uint8_t, 5> call = { 0xE8, 0x38, 0x38, 0xA5, 0x00 };
+            const std::array<std::uint8_t, 5> call = { 0xE8, 0x99, 0xC7, 0xBC, 0x00 };
             const std::array<std::uint8_t, 16> transformEntry = {
                 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
                 0x89, 0x78, 0x10, 0x55, 0x48, 0x8D, 0x68, 0xA1
             };
             const std::array<std::uint8_t, 8> distanceRead = {
-                0xF3, 0x0F, 0x10, 0xA3, 0xF0, 0x0E, 0x00, 0x00
+                0xF3, 0x0F, 0x10, 0xA3, 0xA4, 0x14, 0x00, 0x00
             };
             if (descriptor[0] != base + CameraSystemName || descriptor[1] != sizeof(name) - 1 ||
                 descriptor[2] != base + CameraSystemFunction ||
                 std::memcmp(image + CameraSystemName, name, sizeof(name)) != 0 ||
                 !Matches(image, imageSize, CameraTransformCall, call) ||
                 !Matches(image, imageSize, CameraTransformFunction, transformEntry) ||
-                !Matches(image, imageSize, 0xCB9E21, distanceRead))
+                !Matches(image, imageSize, CameraDistanceRead, distanceRead))
                 return {};
-            return { HookKind::Client1076226, base + CameraTransformCall };
+            return { HookKind::CurrentClient, base + CameraTransformCall };
         }
 
         // Retain the old mod's hook only for a unique match in executable code.
@@ -123,9 +124,9 @@ namespace FirstPerson
         std::vector<std::uint8_t> code = {
             0x50,                                           // push rax
             0x8B, 0x05, 0x1D, 0x00, 0x00, 0x00,           // mov eax,[rip+29] (data at 36)
-            0x89, 0x82, 0xF0, 0x0E, 0x00, 0x00,           // mov [rdx+EF0],eax
+            0x89, 0x82, 0xA4, 0x14, 0x00, 0x00,           // mov [rdx+14A4],eax
             0x58,                                           // pop rax
-            0xC7, 0x82, 0xD4, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0xC7, 0x82, 0x8C, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov dword [rdx+148C],0
             0xE8, 0x00, 0x00, 0x00, 0x00,
             0xE9, 0x00, 0x00, 0x00, 0x00,
             0x90, 0x90,

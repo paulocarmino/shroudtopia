@@ -8,7 +8,7 @@
 ModMetaData metaData = {
     "FirstPersonView",
     "Enables simple but immersive 1st Person view. (Client only)",
-    "1.1.1",
+    "1.1.2",
     "s0T7x",
     "0.1.1",
     true,
@@ -110,7 +110,7 @@ public:
             return;
         }
 
-        if (target.kind == FirstPerson::HookKind::Client1076226)
+        if (target.kind == FirstPerson::HookKind::CurrentClient)
         {
             auto code = FirstPerson::CameraStub();
             mod = new Mem::Detour(target.address, code.data(), code.size(), false, 0);
@@ -130,7 +130,7 @@ public:
             mod->shellcode->updateValue<std::int32_t>(FirstPerson::StubReturnDisplacement, returnDelta);
             configurableDistance = true;
             RefreshCameraDistance(modContext);
-            modContext->Log("[FirstPerson] camera hook prepared for client 1076226; minimap entry preserved");
+            modContext->Log("[FirstPerson] camera hook prepared for Steam build 25988036; minimap entry preserved");
             FirstPerson::ReportStaminaHudStatus(modContext, staminaHud.Prepare(image));
         }
         else
