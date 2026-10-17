@@ -15,7 +15,17 @@ ModMetaData metaData = {
 	true,
 };
 
-// Signature for GameVersion (SVN) 874630
+// Restrict signature scans to the game image. Scanning past it can match
+// copies of the pattern elsewhere (heap, this DLL's own rdata).
+static size_t GameImageSize()
+{
+	auto base = reinterpret_cast<const uint8_t*>(GetModuleHandle(NULL));
+	auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+	auto nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+	return nt->OptionalHeader.SizeOfImage;
+}
+
+// Signatures verified on Steam build 25988036 (October 2026)
 class _Mod {
 public:
 	ModContext* modContext;
@@ -57,7 +67,7 @@ public:
 		const char* pattern = "\x8B\x04\x91\x89\x44\x24\x40";
 		const char* mask = "xxxxxxx";
 		uintptr_t baseAddress = (uintptr_t)GetModuleHandle(NULL);
-		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, 0x2000000);
+		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, GameImageSize());
 
 		if (address)
 		{
@@ -94,7 +104,7 @@ public:
 		const char* mask = "xxxxxxx";
 
 		uintptr_t baseAddress = (uintptr_t)GetModuleHandle(NULL);
-		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, 0x10000000);
+		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, GameImageSize());
 
 		if (address)
 		{
@@ -128,7 +138,7 @@ public:
 	{
 		const char* pattern = "\x41\x29\x6E\x04";
 		uintptr_t baseAddress = (uintptr_t)GetModuleHandle(NULL);
-		uintptr_t address = Mem::FindPattern(pattern, "xxxx", baseAddress, 0xF0000000);
+		uintptr_t address = Mem::FindPattern(pattern, "xxxx", baseAddress, GameImageSize());
 		if (address)
 		{
 			uint8_t modCode[] = {
@@ -148,24 +158,8 @@ public:
 		}
 	}
 
-	// Activates the Infinite Item Use mod.
-	void activate()
-	{
-		mod->activate();
-		active = mod->active;
-		if (active)
-			LOG_CLASS("Activated");
-		else
-			LOG_CLASS("Failed to activate");
-	}
-
-	// Deactivates the Infinite Item Use mod.
-	void deactivate()
-	{
-		mod->deactivate();
-		active = false;
-		LOG_CLASS("Deactivated");
-	}
+	// Not found on build 25988036: the item consumption code no longer
+	// contains this signature, so activation is skipped by _Mod.
 };
 
 class NoResourceCost : public _Mod
@@ -174,16 +168,17 @@ public:
 	NoResourceCost(ModContext* modContext) : _Mod(modContext)
 	{
 		// Pattern matching the AOB scan for the original code in the target process.
-		const char* pattern = "\x48\x89\x5C\x24\x08\x48\x89\x74\x24\x18\x48\x89\x7C\x24\x20\x55\x41\x54\x41\x55\x41\x56\x41\x57\x48\x8D\xAC\x24\x70\xFF\xFF\xFF\x48\x81\xEC\x90\x01\x00\x00\x44\x8B\xBD\xE8\x00\x00\x00\x4C\x8B\xE1\x48\x8B\x0A\x41\x8B\xF9\x48\x8B\x5A\x10\x41\x8B\xF0\x4C\x8B\xEA\x48\x8B\x09";
-		const char* mask = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+		// Function prologue; the 6th argument ([rsp+30] at entry) is the amount needed.
+		// Frame size and the [rbp+..] displacement change between builds.
+		const char* pattern = "\x48\x89\x5C\x24\x08\x48\x89\x74\x24\x18\x48\x89\x7C\x24\x20\x48\x89\x54\x24\x10\x55\x41\x54\x41\x55\x41\x56\x41\x57\x48\x8D\xAC\x24\x00\x00\x00\x00\x48\x81\xEC\x00\x00\x00\x00\x44\x8B\xBD\x00\x00\x00\x00\x4C\x8B\xE1\x48\x8B\x0A";
+		const char* mask = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx????xxx????xxx????xxxxxx";
 
 		// Base address of the module (the game).
 		uintptr_t baseAddress = (uintptr_t)GetModuleHandle(NULL);
 
-		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, 0x10000000);
+		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, GameImageSize());
 		if (address)
 		{
-			// no fall damage
 			uint8_t modCode[] = {
 				0xC7, 0x44, 0x24, 0x30, 0x00, 0x00, 0x00, 0x00,	// - mov[rsp + 30],00000000
 				0x48, 0x89, 0x5C, 0x24, 0x08,					// - mov[rsp + 08],rbx
@@ -214,16 +209,16 @@ public:
 	{
 		if (modContext->game.isServer) return;
 		// Pattern matching the AOB scan for the original code in the target process.
-		const char* pattern = "\xC9\x74\x5E\x44\x8B\x1A\x48\x8D\x43\xFF";
-		const char* mask = "xxxxxxxxxx";
+		// mov r9,rcx; mov rbx,[rcx+..]; je ..; mov r11d,[rdx]; lea rax,[rbx-1]
+		const char* pattern = "\x4C\x8B\xC9\x48\x8B\x99\x00\x00\x00\x00\x74\x00\x44\x8B\x1A\x48\x8D\x43\xFF";
+		const char* mask = "xxxxxx????x?xxxxxxx";
 
 		// Base address of the module (the game).
 		uintptr_t baseAddress = (uintptr_t)GetModuleHandle(NULL);
 
-		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, 0x10000000);
+		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, GameImageSize());
 		if (address)
 		{
-			// no fall damage
 			uint8_t modCode[] = {
 				0x41,0xBB,0x82,0x53,0x2B,0x54,	// - mov r11d,542B5382
 				0x48,0x8D,0x43,0xFF,			// - lea rax,[rbx - 01]
@@ -232,7 +227,7 @@ public:
 			};
 
 			// Creating the detour by replacing the original code with our custom modCode.
-			mod = new Mem::Detour(address + 3, modCode, sizeof(modCode), false, 2);
+			mod = new Mem::Detour(address + 12, modCode, sizeof(modCode), false, 2);
 
 			// Calculate the jump address and update the shellcode.
 			mod->shellcode->updateValue<uint32_t>(
@@ -253,6 +248,10 @@ public:
 			LOG_CLASS("Cannot activate on server");
 			return;
 		}
+		if (!mod) {
+			LOG_CLASS(" pattern not found, not activated");
+			return;
+		}
 		mod->activate();
 		active = mod->active;
 		if (active)
@@ -269,18 +268,16 @@ public:
 	InfItemSplit(ModContext* modContext) : _Mod(modContext)
 	{
 		// Pattern matching the AOB scan for the original code in the target process.
-		const char* pattern = "\x29\x6E\x04\xEB\xC5";
-		const char* mask = "xxxxx";
-
-		const char* handlingPattern = "\x0F\x10\x44\x24\x28\xC6\x07\x00";
-		const char* handlingMask = "xxxxxxxx";
+		// sub [rsi+4],r12d; jmp short ItemHandling; xorps xmm0,xmm0
+		const char* pattern = "\x44\x29\x66\x04\xEB\x00\x0F\x57\xC0";
+		const char* mask = "xxxxx?xxx";
 
 		// Base address of the module (the game).
 		uintptr_t baseAddress = (uintptr_t)GetModuleHandle(NULL);
 
-		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, 0x10000000);
-		uintptr_t handlingAddress = Mem::FindPattern(handlingPattern, handlingMask, baseAddress, 0x10000000);
-		if (address && handlingAddress)
+		uintptr_t address = Mem::FindPattern(pattern, mask, baseAddress, GameImageSize());
+		uintptr_t handlingAddress = address ? address + 6 + *(int8_t*)(address + 5) : 0;
+		if (address)
 		{
 			uint8_t modCode[] = {
 				0x83, 0x6E, 0x04, 0x00,			// - sub dword ptr[rsi + 04],00
@@ -294,7 +291,7 @@ public:
 			mod->shellcode->updateValue<uint32_t>(
 				sizeof(modCode) - 9,
 				(uint32_t)(handlingAddress - ((uintptr_t)mod->shellcode->data->address
-					+ mod->shellcode->data->size))
+					+ sizeof(modCode) - 5))
 			);
 
 			mod->shellcode->updateValue<uint32_t>(
