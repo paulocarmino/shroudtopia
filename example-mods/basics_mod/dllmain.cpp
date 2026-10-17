@@ -27,6 +27,10 @@ public:
 
 	void activate()
 	{
+		if (!mod) {
+			LOG_CLASS(" pattern not found, not activated");
+			return;
+		}
 		mod->activate();
 		active = mod->active;
 		if (active)
@@ -38,7 +42,7 @@ public:
 	// Deactivates the mod by restoring the original code.
 	void deactivate()
 	{
-		mod->deactivate();
+		if (mod) mod->deactivate();
 		active = false;
 		LOG_CLASS("Deactivated");
 	}
