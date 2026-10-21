@@ -13,6 +13,8 @@
   let tab = $state<"world" | "mods" | "update">("world");
   let busy = $state(false);
   let error = $state<string | null>(null);
+  /** what "Entrar pelo Steam" says when Steam did not start the game by itself */
+  let notice = $state<string | null>(null);
   /** the code screen stays up after sharing (or "Gerar código") until "Pronto", though the phase is already main */
   let codeScreen = $state<string | null>(null);
   /** the first-run flow stays up after a redeem until "Pronto" */
@@ -50,11 +52,18 @@
   $effect(() => {
     if (phase === "setup") holdFirstRun = true;
   });
+  // the hint is done once the game is up
+  $effect(() => {
+    if (game) notice = null;
+  });
   const firstRun = $derived(phase !== "main" || codeScreen !== null || holdFirstRun);
 
   function onaction(kind: string) {
     if (kind === "play") act(() => api.play());
-    else if (kind === "join") act(() => api.join());
+    else if (kind === "join")
+      act(async () => {
+        notice = (await api.join())?.note ?? null;
+      });
   }
   function onupdate() {
     if (!s) return;
@@ -150,6 +159,7 @@
               onlogout={() => act(() => api.logout())}
             />
           {/if}
+          {#if notice && tab === "world"}<Note text={notice} icon="info" />{/if}
           {#if error}<Note text={error} icon="alert" error />{/if}
         </div>
       </div>

@@ -74,9 +74,21 @@ pub async fn play(app: AppHandle) -> R {
 #[tauri::command]
 pub async fn join(app: AppHandle) -> R {
     blocking(move || {
-        let holder = app.state::<Shared>().engine(|e| e.foreign_lock().map(|l| l.holder.clone()).ok_or_else(|| "Ninguém está hospedando agora.".to_string()))?;
-        open(&app, &shroudtopia_core::engine::join_url(holder.as_str().unwrap_or_default()))?;
-        Ok(Value::Null)
+        let lock = app.state::<Shared>().engine(|e| e.foreign_lock().map(|l| (l.holder.clone(), l.nick.clone())).ok_or_else(|| "Ninguém está hospedando agora.".to_string()))?;
+        let holder = lock.get(0).and_then(Value::as_str).unwrap_or_default().to_string();
+        let nick = lock.get(1).and_then(Value::as_str).unwrap_or("o host").to_string();
+        // Steam's "Join game" on the host. The current Steam client often ignores it when it comes from outside
+        // (seen 2026-10-21): when the game has not started 10 s later, start it and say where to join.
+        open(&app, &shroudtopia_core::engine::join_url(&holder))?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
+            if shroudtopia_win::process::game_running() {
+                return Ok(Value::Null);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        open(&app, shroudtopia_core::engine::STEAM_PLAY)?;
+        Ok(json!({ "note": format!("O Enshrouded está abrindo. Lá dentro, vá em Jogar › Entrar e escolha o mundo de {nick} na lista de amigos.") }))
     })
     .await
 }

@@ -65,7 +65,7 @@ function mockCall(cmd: string, args?: Record<string, unknown>): unknown {
 export const api = {
   state: () => call<UiState>("get_state"),
   play: () => call<void>("play"),
-  join: () => call<void>("join"),
+  join: () => call<{ note?: string } | null>("join"),
   resolve: (keepMine: boolean) => call<void>("resolve", { keepMine }),
   loginStart: () => call<void>("login_start"),
   loginCancel: () => call<void>("login_cancel"),
