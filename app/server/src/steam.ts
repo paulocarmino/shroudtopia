@@ -14,7 +14,7 @@ const MUST_BE_SIGNED = ['op_endpoint', 'claimed_id', 'identity', 'return_to', 'r
 const NONCE_WINDOW_MS = 10 * 60_000
 
 export interface SteamSettings {
-  /** the server's own public origin, e.g. https://shroudtopia.paulocarmino.com */
+  /** the server's own public origin, e.g. https://shroudtopia-api.paulocarmino.com */
   origin: string
   /** Steam's OpenID endpoint; a fake one in the tests */
   endpoint: string

@@ -3,6 +3,13 @@
 Both sides build and test against this file and `contract.example.json`. The example holds one real
 request/response per route; each side's tests read it, so a change here breaks both until both agree.
 
+## Hosts
+
+- The API (every route below, the Steam login's redirect and callback): `https://shroudtopia-api.paulocarmino.com`.
+  That is `<server>` below, and the origin the Steam login's `return_to` and `realm` are built from.
+- `https://shroudtopia.paulocarmino.com` is only the landing page (`app/landing`): it answers no `/api` or
+  `/auth` route, and the API host does not serve the landing page.
+
 ## Identity
 
 - A **player** is a Steam account: `steamId` (steamid64, string) and `nick` (Steam `PersonaName`).

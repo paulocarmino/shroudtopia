@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildServer } from './app.ts'
 import { loadConfig } from './config.ts'
+import { loadLanding } from './landing.ts'
 import { FolderObjectStore, S3ObjectStore } from './object-store.ts'
 import { STEAM_OPENID_ENDPOINT } from './steam.ts'
 import { Sync } from './sync.ts'
@@ -16,6 +17,7 @@ const app = await buildServer({
   sync,
   store,
   steam: { origin: config.publicOrigin, endpoint: STEAM_OPENID_ENDPOINT },
+  ...(config.landing ? { landing: { host: config.landing.host, files: loadLanding(config.landing.dir) } } : {}),
   build: config.build,
   log: config.log,
   trustProxy: config.trustProxy,
@@ -34,4 +36,4 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 }
 
 await app.listen({ port: config.port, host: config.host })
-console.log(`Shroudtopia sync ${config.build} on ${config.host}:${config.port} as ${config.publicOrigin}, data in ${config.dataDir}, blobs in ${config.s3 ? `s3 ${config.s3.bucket}` : 'the data folder'}`)
+console.log(`Shroudtopia sync ${config.build} on ${config.host}:${config.port} as ${config.publicOrigin}, data in ${config.dataDir}, blobs in ${config.s3 ? `s3 ${config.s3.bucket}` : 'the data folder'}${config.landing ? `, landing page for ${config.landing.host}` : ''}`)
