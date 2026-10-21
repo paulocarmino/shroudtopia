@@ -48,7 +48,7 @@
     {#each worlds as world (world.id)}
       <!-- per world: where it lives on this PC, and its own invite code -->
       <div class="row">
-        <div class="txt"><div class="name">Onde o {world.name} fica</div><div class="sub">{world.file} · {world.store === "steam" ? "jogos salvos do Steam" : "jogos salvos locais"}</div></div>
+        <div class="txt"><div class="name">Onde o mundo fica</div><div class="sub">{world.name} · {world.file} · {world.store === "steam" ? "jogos salvos do Steam" : "jogos salvos locais"}</div></div>
         <div class="seg small">
           <button aria-pressed={world.store === "steam"} disabled={busy || !s.settings.steamStore} onclick={() => onstore(world.id, "steam")}>Steam</button>
           <button aria-pressed={world.store === "local"} disabled={busy || !s.settings.localStore} onclick={() => onstore(world.id, "local")}>Local</button>

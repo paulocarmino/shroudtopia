@@ -579,6 +579,21 @@ fn a_world_takes_its_lease_on_the_first_write_of_its_slot() {
 }
 
 #[test]
+fn a_jogar_from_long_ago_takes_no_lease() {
+    let (mut w, a, _b) = two_worlds();
+    // "Jogar" on Mundo do bang, but the game did not start then; it is started from Steam 10 minutes later
+    w.me.e.play(Some(&a)).unwrap();
+    w.at(600);
+    w.tick(true, false);
+    assert!(w.server.world(&a).lock.is_none(), "an old Jogar says nothing about the world opened now");
+    // its slot written: now it is the world played
+    w.me.write(0, b"bang, later");
+    w.at(1);
+    w.tick(true, false);
+    assert_eq!(w.server.world(&a).lock.unwrap().holder, "76561198065863968");
+}
+
+#[test]
 fn a_branch_on_one_world_only() {
     let (mut w, a, b) = two_worlds();
     // Paulo plays "Outro" offline; the friend plays it online; Paulo comes back: Outro diverges, the other does not

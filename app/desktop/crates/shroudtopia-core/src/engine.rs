@@ -33,6 +33,8 @@ pub const STABLE: Duration = Duration::seconds(5);
 pub const HEARTBEAT: Duration = Duration::seconds(60);
 pub const FETCH_IDLE: Duration = Duration::seconds(10);
 pub const FETCH_PRESENCE: Duration = Duration::seconds(30);
+/// How long after a world's "Jogar" the game starting counts as that world's session.
+pub const LAUNCH_VALID: Duration = Duration::minutes(3);
 
 pub fn sha_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
@@ -83,6 +85,7 @@ pub struct Runtime {
     pub stash: std::collections::BTreeMap<String, WorldRt>,
     /// the world whose "Jogar" started the game: its lease is taken at game start
     pub launched: Option<String>,
+    pub launched_at: Option<DateTime<Utc>>,
     /// the world a transfer under way is for
     pub transfer_world: Option<String>,
     /// the slot of this world was written during this game session (its lease is taken then)
@@ -629,6 +632,12 @@ impl Engine {
             self.send_avatar();
         }
         let starting = game_running && (!was || first);
+        // a "Jogar" counts only for the game it started: one from long before (Steam did not start the game, or it
+        // was closed at the menu) says nothing about the world opened now
+        if starting && self.rt.launched_at.is_none_or(|t| now - t > LAUNCH_VALID) {
+            self.rt.launched = None;
+            self.rt.launched_at = None;
+        }
         let ending = !game_running && was;
         self.each_world(|e| e.tick_world(starting, ending));
         if ending {
@@ -995,6 +1004,7 @@ impl Engine {
                 self.pull(&head)?;
             }
             self.rt.launched = self.rt.cur.clone();
+            self.rt.launched_at = Some(self.rt.now);
         }
         Ok(STEAM_PLAY)
     }
