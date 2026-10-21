@@ -90,11 +90,11 @@ footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size:
       <h1>Um mundo de Enshrouded, dois PCs, sempre em dia.</h1>
       <p class="lead">Quem chegar primeiro abre o mundo e o outro entra pela Steam. Quando o host fecha o jogo, o mundo sobe e fica pronto no PC do amigo. E os mods se ligam com um clique.</p>
       <div class="cta">
-        <a class="btn" id="download" href="https://github.com/paulocarmino/shroudtopia/releases/latest/download/Shroudtopia.exe">
+        <a class="btn" id="download" href="https://github.com/paulocarmino/shroudtopia/releases/latest/download/Shroudtopia.zip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
           Baixar para Windows
         </a>
-        <span class="meta" id="version">App portátil, sem instalador</span>
+        <span class="meta" id="version">.zip com o app, sem instalador</span>
       </div>
     </div>
   </div>
@@ -125,7 +125,7 @@ footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size:
   <section>
     <h2>Como começar</h2>
     <ol class="steps">
-      <li><b>Baixe e abra o app</b>Ele acha o Enshrouded e os seus mundos sozinho.</li>
+      <li><b>Baixe, extraia e abra o app</b>Tire o Shroudtopia.exe do .zip e abra. Ele acha o Enshrouded e os seus mundos sozinho.</li>
       <li><b>Entre com a Steam</b>O navegador abre na página oficial da Steam; você confirma e volta.</li>
       <li><b>Compartilhe ou cole o código</b>Um escolhe o mundo e manda o código; o outro cola e o mundo aparece no jogo.</li>
     </ol>
@@ -150,9 +150,9 @@ footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size:
 fetch("https://api.github.com/repos/paulocarmino/shroudtopia/releases/latest")
   .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
   .then((rel) => {
-    const exe = (rel.assets || []).find((a) => /\.exe$/i.test(a.name));
-    if (exe) document.getElementById("download").href = exe.browser_download_url;
-    document.getElementById("version").textContent = `Versão ${rel.tag_name.replace(/^v/, "")} · app portátil, sem instalador`;
+    const zip = (rel.assets || []).find((a) => a.name === "Shroudtopia.zip");
+    if (zip) document.getElementById("download").href = zip.browser_download_url;
+    document.getElementById("version").textContent = `Versão ${rel.tag_name.replace(/^v/, "")} · .zip com o app, sem instalador`;
   })
   .catch((status) => {
     if (status !== 404) return;

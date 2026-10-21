@@ -14,6 +14,7 @@
 #       --exe defaults to app/desktop/dist/Shroudtopia.exe (scripts/build.sh). Writes app/desktop/release/<version>/:
 #         shroudtopia-mods.zip      shroudtopia.dll + winmm.dll + mods/*.dll
 #         Shroudtopia.exe
+#         Shroudtopia.zip           the exe zipped, for the landing page's download button
 #         shroudtopia-release.json  { payload, signature }: the manifest (signature.rs) signed with the private key
 #       and checks the signature with the public key before it says it is done.
 #
@@ -88,6 +89,14 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
 print("    zip:", ", ".join(loader + ["mods/" + m for m in mods]))
 PYEOF
 cp "$EXE" "$OUT/Shroudtopia.exe"
+# what the landing page hands out: the exe inside a zip (browsers and Windows treat a bare .exe download harshly).
+# The updater keeps using the signed Shroudtopia.exe; this zip is not part of the signed manifest.
+"$PY" - "$OUT" <<'PYEOF'
+import os, sys, zipfile
+out = sys.argv[1]
+with zipfile.ZipFile(os.path.join(out, "Shroudtopia.zip"), "w", zipfile.ZIP_DEFLATED) as z:
+    z.write(os.path.join(out, "Shroudtopia.exe"), "Shroudtopia.exe")
+PYEOF
 
 line() { printf 'file %s %s %s\n' "$1" "$(wc -c < "$OUT/$1" | tr -d ' ')" "$(openssl dgst -sha256 -r "$OUT/$1" | cut -d' ' -f1)"; }
 {
@@ -118,4 +127,4 @@ ls -l "$OUT"
 echo
 echo "Not published. To publish it (Paulo, by hand):"
 echo "  gh release create v$VERSION --repo paulocarmino/shroudtopia ${NOTES:+--notes-file \"$NOTES\"} \\"
-echo "     \"$OUT/shroudtopia-mods.zip\" \"$OUT/Shroudtopia.exe\" \"$OUT/shroudtopia-release.json\""
+echo "     \"$OUT/shroudtopia-mods.zip\" \"$OUT/Shroudtopia.exe\" \"$OUT/Shroudtopia.zip\" \"$OUT/shroudtopia-release.json\""
