@@ -84,7 +84,9 @@ fn set_phase(app: &AppHandle, phase: Phase) {
 fn step(app: &AppHandle) {
     let shared = app.state::<Shared>();
     let u = &shared.updates;
-    let game_running = shroudtopia_win::process::game_running();
+    // nothing below runs with the game open, nor in the minute after it closes (process::game_settled): a friend's PC
+    // froze on 2026-10-21 with the game and an update together. The check is made again right before each step.
+    let settled = shroudtopia_win::process::game_settled();
     let (due, apply, phase) = {
         let mut i = u.inner.lock().unwrap();
         let due = i.check_now || (matches!(i.phase, Phase::Idle) && i.saved.last_check.is_none_or(|t| Utc::now() - t >= updater::CHECK_EVERY || Utc::now() < t));
@@ -92,6 +94,11 @@ fn step(app: &AppHandle) {
         let apply = std::mem::take(&mut i.apply_now);
         (due, apply, i.phase.clone())
     };
+    if due && !settled {
+        // looked at again once the game has been closed a while
+        u.inner.lock().unwrap().check_now = true;
+        return;
+    }
     if due && matches!(phase, Phase::Idle | Phase::Available(_)) {
         set_phase(app, Phase::Checking);
         let r = updater::fetch_latest(PRODUCT_KEY.trim());
@@ -118,8 +125,10 @@ fn step(app: &AppHandle) {
         crate::emit_state(app);
         return;
     }
+    let queued = matches!(phase, Phase::Queued(_));
     match phase {
-        Phase::Available(offer) if apply => {
+        Phase::Available(offer) if apply && !settled => set_phase(app, Phase::Queued(offer)),
+        Phase::Available(offer) | Phase::Queued(offer) if (apply || queued) && settled => {
             if let Err(e) = download(app, &offer) {
                 let mut i = u.inner.lock().unwrap();
                 i.error = Some(e);
@@ -129,11 +138,11 @@ fn step(app: &AppHandle) {
                 return;
             }
             set_phase(app, Phase::Ready(offer.clone()));
-            if !game_running {
+            if shroudtopia_win::process::game_settled() {
                 install(app, &offer);
             }
         }
-        Phase::Ready(offer) if !game_running => install(app, &offer),
+        Phase::Ready(offer) if settled => install(app, &offer),
         _ => {}
     }
 }
@@ -166,6 +175,11 @@ fn download(app: &AppHandle, offer: &Offer) -> Result<(), String> {
 
 fn install(app: &AppHandle, offer: &Offer) {
     let shared = app.state::<Shared>();
+    // the last look before the game folder is written: the game may have opened during the download
+    if !shroudtopia_win::process::game_settled() {
+        set_phase(app, Phase::Ready(Box::new(offer.clone())));
+        return;
+    }
     let zip = shared.updates.inner.lock().unwrap().mods_zip.clone();
     let game = shared.game_folder.lock().unwrap().clone();
     let (Some(zip), Some(game)) = (zip, game) else {

@@ -244,6 +244,8 @@ pub enum Phase {
     Checking,
     /// a newer release that verified
     Available(Box<Offer>),
+    /// "Atualizar" was clicked with the game open: nothing is downloaded until it has been closed a while
+    Queued(Box<Offer>),
     /// downloaded and checked; waits for the game to close
     Ready(Box<Offer>),
     Installing(Box<Offer>, u8),
@@ -294,10 +296,20 @@ pub fn view(phase: &Phase, installed: Option<&str>, checked: Option<DateTime<Utc
             badge: true,
             app_version,
         },
+        Phase::Queued(o) => UpdateView {
+            state: "blocked".into(),
+            name: format!("Versão {} na fila", o.manifest.version),
+            sub: "Nada é baixado nem instalado com o Enshrouded aberto. Instala sozinho um minuto depois que ele fechar.".into(),
+            action: act("Atualizar", "primary", true),
+            progress: None,
+            changes: o.changes.clone(),
+            badge: true,
+            app_version,
+        },
         Phase::Ready(o) => UpdateView {
             state: "blocked".into(),
             name: format!("Versão {} pronta", o.manifest.version),
-            sub: "Feche o Enshrouded para instalar. Instala sozinho quando fechar.".into(),
+            sub: "Instala sozinho um minuto depois que o Enshrouded fechar.".into(),
             action: act("Atualizar", "primary", true),
             progress: None,
             changes: o.changes.clone(),
@@ -449,7 +461,11 @@ mod tests {
         assert_eq!((v.state.as_str(), v.name.as_str()), ("avail", "Versão 0.4.3 disponível"));
         assert!(v.sub.starts_with("Você está na 0.4.2 · "));
         let v = view(&Phase::Ready(o.clone()), Some("0.4.2"), None, None, false, true, now, off);
-        assert_eq!((v.state.as_str(), v.name.as_str(), v.sub.as_str()), ("blocked", "Versão 0.4.3 pronta", "Feche o Enshrouded para instalar. Instala sozinho quando fechar."));
+        assert_eq!((v.state.as_str(), v.name.as_str(), v.sub.as_str()), ("blocked", "Versão 0.4.3 pronta", "Instala sozinho um minuto depois que o Enshrouded fechar."));
+        assert!(v.action.unwrap().disabled);
+        // clicked with the game open: queued, nothing downloaded, the button stays off
+        let v = view(&Phase::Queued(o.clone()), Some("0.4.2"), None, None, false, true, now, off);
+        assert_eq!((v.state.as_str(), v.name.as_str()), ("blocked", "Versão 0.4.3 na fila"));
         assert!(v.action.unwrap().disabled);
         let v = view(&Phase::Installing(o, 70), Some("0.4.2"), None, None, false, false, now, off);
         assert_eq!((v.name.as_str(), v.progress.unwrap().text.as_str()), ("Instalando 0.4.3", "Copiando os mods para a pasta do jogo"));

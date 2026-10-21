@@ -39,9 +39,29 @@ pub fn look(_exe: &str) -> Option<bool> {
     Some(false)
 }
 
+/// The last time (unix seconds) the game was seen running, or a look failed.
+static LAST_SEEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// How long the game must have been closed before the app touches the game folder or starts Steam as the game:
+/// right after the exit Steam is still syncing the game's cloud files and the game's files may still be held.
+pub const SETTLE_SECS: u64 = 60;
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
 /// The game's process; a look that failed counts as running.
 pub fn game_running() -> bool {
-    look(GAME_EXE).unwrap_or(true)
+    let running = look(GAME_EXE).unwrap_or(true);
+    if running {
+        LAST_SEEN.store(now_secs(), std::sync::atomic::Ordering::Relaxed);
+    }
+    running
+}
+
+/// The game is closed and has been for `SETTLE_SECS`: the only state in which the app installs mods, swaps its own
+/// exe or runs the Steam storage helper. Looked at right before each of those steps, never cached.
+pub fn game_settled() -> bool {
+    !game_running() && now_secs().saturating_sub(LAST_SEEN.load(std::sync::atomic::Ordering::Relaxed)) >= SETTLE_SECS
 }
 
 pub fn steam_running() -> bool {
