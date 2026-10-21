@@ -1,0 +1,22 @@
+[package]
+name = "shroudtopia-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Shroudtopia desktop core: Steam discovery, mods config, sync engine, updater. No Win32, no Tauri; tested on Linux."
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+sha2 = "0.10"
+base64 = "0.22"
+# the signature on releases (signature.rs): verify_strict, nothing of the primitive written here
+ed25519-dalek = "2"
+ureq = { version = "2", default-features = false, features = ["tls", "native-certs", "gzip", "json"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"
+ed25519-dalek = { version = "2", features = ["rand_core"] }

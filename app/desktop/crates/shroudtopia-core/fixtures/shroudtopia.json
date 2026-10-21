@@ -1,0 +1,23 @@
+{
+    "active": true,
+    "bootDelay": 3000,
+    "updateDelay": 500,
+    "enableLogging": true,
+    "logLevel": "INFO",
+    "mods": {
+        "basics": {
+            "active": true,
+            "no_stamina_loss": true,
+            "no_fall_damage": true,
+            "_no_resource_cost": false,
+            "hide_stamina_gauge": true
+        },
+        "Flight Mod": {
+            "active": true
+        },
+        "FirstPersonView": {
+            "active": false,
+            "camera_distance": -0.15
+        }
+    }
+}

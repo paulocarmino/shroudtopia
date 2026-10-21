@@ -1,0 +1,5 @@
+# The build runs in Linux (WSL Docker): scripts and sources stay LF on every checkout.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.ksd binary

@@ -1,0 +1,18 @@
+[package]
+name = "shroudtopia-win"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Shroudtopia Windows glue: registry (Steam path, Run key), game process watch."
+
+[dependencies]
+shroudtopia-core = { path = "../shroudtopia-core" }
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+] }
