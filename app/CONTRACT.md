@@ -8,9 +8,29 @@ request/response per route; each side's tests read it, so a change here breaks b
 - A **player** is a Steam account: `steamId` (steamid64, string) and `nick` (Steam `PersonaName`).
   The app reads both from `Steam/config/loginusers.vdf`, the entry with `"MostRecent" "1"`.
   Optional avatar: `Steam/config/avatarcache/<steamId>.png`, uploaded once as PNG.
-- A **device token** authenticates the app (`Authorization: Bearer <token>`). It is issued by
-  `POST /api/devices` the first time the app talks to the server; no sign-up, no password. The
-  token is stored in the app's config under `%APPDATA%\Shroudtopia`.
+- A **device token** authenticates the app (`Authorization: Bearer <token>`). It is issued only
+  after a **Steam login** (Steam OpenID 2.0), which proves the steamId; the server never trusts a
+  steamId the app sends. The token is stored in the app's config under `%APPDATA%\Shroudtopia`.
+
+### Steam login (replaces `POST /api/devices`)
+
+1. App: `POST /api/auth/steam/start { nick }` → `{ sessionId, loginUrl, expiresAt }` (10 min).
+   `nick` is the PersonaName read from `loginusers.vdf` (Steam OpenID does not return it).
+2. App opens `loginUrl` in the default browser. It points to `/auth/steam/redirect/:sessionId`,
+   which redirects to `https://steamcommunity.com/openid/login` with
+   `openid.return_to=https://<server>/auth/steam/callback/:sessionId` and `openid.realm=https://<server>/`.
+3. Steam sends the browser back to the callback. The server verifies the assertion with Steam
+   (`openid.mode=check_authentication`, must answer `is_valid:true`), checks `return_to` matches,
+   takes the steamid64 from `openid.claimed_id` (`https://steamcommunity.com/openid/id/<steamid64>`),
+   and shows a plain page "Pronto, pode voltar para o app".
+4. App polls `GET /api/auth/steam/poll/:sessionId` every 2 s → `202 { status: "pending" }`, then
+   `200 { token, player }` exactly once (a second poll is `410`), or `410 { error: "expired" }`.
+5. The app compares `player.steamId` with the MostRecent account in `loginusers.vdf`; if they differ
+   it says so (logged into another Steam account in the browser) and offers to log in again.
+
+- `GET /api/devices` → `{ devices: [{ deviceId, createdAt, lastSeenAt, current }] }`;
+  `DELETE /api/devices/:deviceId` revokes one; `DELETE /api/devices/current` is logout.
+- `PATCH /api/me { nick }` updates the nick when the app sees a new PersonaName.
 
 ## Worlds and versions
 
@@ -48,7 +68,11 @@ request/response per route; each side's tests read it, so a change here breaks b
 
 | Method | Path | Body | Answer |
 |---|---|---|---|
-| POST | `/api/devices` | `{ steamId, nick }` | `{ token, player }` |
+| POST | `/api/auth/steam/start` | `{ nick }` | `{ sessionId, loginUrl, expiresAt }` |
+| GET | `/api/auth/steam/poll/:sessionId` | | `202 { status }` / `200 { token, player }` / `410` |
+| GET | `/api/devices` | | `{ devices }` |
+| DELETE | `/api/devices/:deviceId` or `/api/devices/current` | | `204` |
+| PATCH | `/api/me` | `{ nick }` | `{ player }` |
 | PUT | `/api/me/avatar` | PNG bytes | `204` |
 | GET | `/api/worlds` | | `{ worlds: World[] }` |
 | POST | `/api/worlds` | `{ name }` | `World` |

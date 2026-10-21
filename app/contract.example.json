@@ -1,23 +1,64 @@
 {
-  "createDevice": {
-    "request": { "steamId": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ" },
+  "steamLoginStart": {
+    "request": {
+      "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ"
+    },
+    "response": {
+      "sessionId": "01JB8S0000000000000000000S",
+      "loginUrl": "https://shroudtopia.paulocarmino.com/auth/steam/redirect/01JB8S0000000000000000000S",
+      "expiresAt": "2026-10-21T21:22:00.000Z"
+    }
+  },
+  "steamLoginPending": {
+    "status": 202,
+    "response": {
+      "status": "pending"
+    }
+  },
+  "steamLoginDone": {
     "response": {
       "token": "dev_01JB7Z8Q2W3E4R5T6Y7U8I9O0P",
-      "player": { "steamId": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ" }
+      "player": {
+        "steamId": "76561198065863968",
+        "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ"
+      }
+    }
+  },
+  "devices": {
+    "response": {
+      "devices": [
+        {
+          "deviceId": "01JB8D0000000000000000000D",
+          "createdAt": "2026-10-21T21:12:30.000Z",
+          "lastSeenAt": "2026-10-21T22:31:00.000Z",
+          "current": true
+        }
+      ]
     }
   },
   "createInvite": {
-    "response": { "code": "ENSH-7KQ2", "expiresAt": "2026-10-22T23:40:00.000Z" }
+    "response": {
+      "code": "ENSH-7KQ2",
+      "expiresAt": "2026-10-22T23:40:00.000Z"
+    }
   },
   "redeemInvite": {
-    "request": { "code": "ENSH-7KQ2" }
+    "request": {
+      "code": "ENSH-7KQ2"
+    }
   },
   "world": {
     "worldId": "01JB7Z9A0B1C2D3E4F5G6H7J8K",
     "name": "Mundo do bang",
     "members": [
-      { "steamId": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ" },
-      { "steamId": "76561198000000001", "nick": "rodrigao_br" }
+      {
+        "steamId": "76561198065863968",
+        "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ"
+      },
+      {
+        "steamId": "76561198000000001",
+        "nick": "rodrigao_br"
+      }
     ],
     "head": {
       "versionId": "01JB80AAAAAAAAAAAAAAAAAAAA",
@@ -46,17 +87,32 @@
   },
   "lockTaken": {
     "response": {
-      "lock": { "holder": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ", "since": "2026-10-21T21:12:00.000Z", "expiresAt": "2026-10-21T21:17:00.000Z" }
+      "lock": {
+        "holder": "76561198065863968",
+        "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ",
+        "since": "2026-10-21T21:12:00.000Z",
+        "expiresAt": "2026-10-21T21:17:00.000Z"
+      }
     }
   },
   "lockBusy": {
     "status": 409,
     "response": {
-      "lock": { "holder": "76561198000000001", "nick": "rodrigao_br", "since": "2026-10-21T20:47:00.000Z", "expiresAt": "2026-10-21T21:16:00.000Z" }
+      "lock": {
+        "holder": "76561198000000001",
+        "nick": "rodrigao_br",
+        "since": "2026-10-21T20:47:00.000Z",
+        "expiresAt": "2026-10-21T21:16:00.000Z"
+      }
     }
   },
   "uploadDiverged": {
-    "requestHeaders": { "X-Parent": "01JB7ZZZZZZZZZZZZZZZZZZZZZ", "X-Sha256": "aa11000000000000000000000000000000000000000000000000000000000000", "X-Started-At": "2026-10-21T19:00:00.000Z", "X-Ended-At": "2026-10-21T20:30:00.000Z" },
+    "requestHeaders": {
+      "X-Parent": "01JB7ZZZZZZZZZZZZZZZZZZZZZ",
+      "X-Sha256": "aa11000000000000000000000000000000000000000000000000000000000000",
+      "X-Started-At": "2026-10-21T19:00:00.000Z",
+      "X-Ended-At": "2026-10-21T20:30:00.000Z"
+    },
     "response": {
       "version": {
         "versionId": "01JB8F0000000000000000000B",
@@ -75,8 +131,18 @@
   "presence": {
     "response": {
       "players": [
-        { "steamId": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ", "appOnline": true, "inGame": false },
-        { "steamId": "76561198000000001", "nick": "rodrigao_br", "appOnline": true, "inGame": true }
+        {
+          "steamId": "76561198065863968",
+          "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ",
+          "appOnline": true,
+          "inGame": false
+        },
+        {
+          "steamId": "76561198000000001",
+          "nick": "rodrigao_br",
+          "appOnline": true,
+          "inGame": true
+        }
       ]
     }
   }
