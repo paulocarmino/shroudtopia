@@ -38,6 +38,10 @@ The UI is not built until Paulo approves a layout in `plans/ui-prototipo/index.h
    `%USERPROFILE%\Saved Games\keen games\Enshrouded\default\worldN.ksd`. A copied `world0.ksd`
    showed up there as slot 1 with its name. Shared worlds live in that folder; the player's own
    Steam worlds are only read (to offer one for sharing, copied into a free local slot).
-3. Writing Steam slots would need the Steam API running as app 1203620 (`ISteamRemoteStorage`);
-   not planned. Steam Cloud only syncs one account's PCs anyway; the server's history replaces it.
+3. **Steam slots work through the Steam API.** With the game closed, the app loads the game's own
+   `steam_api64.dll` as app 1203620 (`SteamAPI_InitFlat`, `ISteamRemoteStorage` v016) and calls
+   `FileWrite("world2.ksd", …)`: Steam tracks the file (`remotecache.vdf`), uploads it to Steam
+   Cloud, and the game lists it in "Jogos salvos: Steam" (confirmed in-game). Steam shows
+   "playing Enshrouded" for the few seconds this takes. **Steam is the default store for a shared
+   world; Local is a per-world option.**
 4. **Pull window.** "Jogar" in the app pulls first, then launches the game.

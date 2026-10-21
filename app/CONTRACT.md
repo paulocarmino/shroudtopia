@@ -74,6 +74,7 @@ Errors are `{ error: "<code>", message }` with a fitting status.
   5 s, then upload. Final upload when `enshrouded.exe` exits.
 - Pull: only while the game is closed, write to a temp file in the same folder, then replace.
   Keep the replaced file as `<slot>.ksd.shroudtopia-<versionId>` in the app's own backup folder.
-- **Folder**: shared worlds live in the local saves folder
-  `%USERPROFILE%\Saved Games\keen games\Enshrouded\default\`, never in Steam's cloud folder (the
-  game does not see files Steam did not write there; see PLAN.md spike results).
+- **Store**: a shared world lives either in a Steam Cloud slot (default) or in the local saves
+  folder `%USERPROFILE%\Saved Games\keen games\Enshrouded\default\`. Steam slots are written only
+  through `ISteamRemoteStorage` with the game closed (a plain file copy is invisible to the game);
+  reads can use the file on disk. See PLAN.md spike results.
