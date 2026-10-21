@@ -192,7 +192,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hist { border-top: 1px solid var(--border); }
 .hist-row { display: grid; grid-template-columns: 24px 1fr auto auto; gap: 12px; align-items: center; padding: 9px 16px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .hist-row + .hist-row { border-top: 1px solid var(--border); }
-.hist-row .when { color: var(--muted); }
+.hist-row .when { color: var(--muted); white-space: nowrap; }
 .hist-row .size { color: var(--faint); font-size: 12px; }
 .tags { display: flex; gap: 6px; }
 .tag { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 5px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
@@ -422,7 +422,7 @@ function worldStatus() {
 function worldHistory() {
   const d = SYNC[S.sync];
   const rows = HIST[S.sync].map((r, i) => `<div class="hist-row${i === 0 ? ' current' : ''}">
-    <span class="avatar ${r[0] === 'me' ? 'me' : 'friend'}">${r[1][0]}</span>
+    <span class="avatar ${r[0] === 'me' ? 'me' : 'friend'}">${r[0] === 'me' ? MEI : FRI}</span>
     <span><b style="font-weight:500">${r[1]}</b> <span class="when">· ${r[2]}</span></span>
     <span class="tags">${r[4].map(t => `<span class="tag ${t}">${TAGTXT[t]}</span>`).join('')}</span>
     <span class="size">${r[3]}</span></div>`).join('');
