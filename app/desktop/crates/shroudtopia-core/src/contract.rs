@@ -13,19 +13,52 @@ pub struct Player {
     pub nick: String,
 }
 
-/// `POST /api/devices` body.
+/// `POST /api/auth/steam/start` body (and `PATCH /api/me`): the PersonaName of `loginusers.vdf`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeviceRequest {
-    pub steam_id: String,
+pub struct NickBody {
     pub nick: String,
 }
 
-/// `POST /api/devices` answer.
+/// `POST /api/auth/steam/start` answer: the page the browser opens, and the session the app polls.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DeviceResponse {
+pub struct LoginStart {
+    pub session_id: String,
+    pub login_url: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+/// `GET /api/auth/steam/poll/:sessionId`, 202.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoginPending {
+    pub status: String,
+}
+
+/// `GET /api/auth/steam/poll/:sessionId`, 200 (exactly once).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoginDone {
     pub token: String,
+    pub player: Player,
+}
+
+/// One device of `GET /api/devices`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Device {
+    pub device_id: String,
+    pub created_at: DateTime<Utc>,
+    pub last_seen_at: DateTime<Utc>,
+    pub current: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceList {
+    pub devices: Vec<Device>,
+}
+
+/// `PATCH /api/me` answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Me {
     pub player: Player,
 }
 
@@ -58,7 +91,7 @@ pub struct Lock {
 }
 
 /// A shared world. `GET /api/worlds` may leave out `head`, `lock`, `history` (they default to empty).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct World {
     pub world_id: String,
@@ -188,16 +221,26 @@ mod tests {
     fn every_shape_of_the_example_deserializes() {
         let ex = example();
         let keys: Vec<&String> = ex.as_object().unwrap().keys().collect();
-        let known = ["createDevice", "createInvite", "redeemInvite", "world", "lockTaken", "lockBusy", "uploadDiverged", "presence"];
+        let known = ["steamLoginStart", "steamLoginPending", "steamLoginDone", "devices", "createInvite", "redeemInvite", "world", "lockTaken", "lockBusy", "uploadDiverged", "presence"];
         for key in &keys {
             assert!(known.contains(&key.as_str()), "contract.example.json has `{key}`, which this crate does not know yet");
         }
+        for key in known {
+            assert!(ex.get(key).is_some(), "contract.example.json lost `{key}`");
+        }
 
-        let req: DeviceRequest = shape(&ex["createDevice"]["request"]);
-        assert_eq!(req.steam_id, "76561198065863968");
-        let dev: DeviceResponse = shape(&ex["createDevice"]["response"]);
-        assert_eq!(dev.player.nick, req.nick);
+        let start_req: NickBody = shape(&ex["steamLoginStart"]["request"]);
+        let start: LoginStart = shape(&ex["steamLoginStart"]["response"]);
+        assert!(start.login_url.ends_with(&start.session_id));
+        assert_eq!(ex["steamLoginPending"]["status"], 202);
+        let pending: LoginPending = shape(&ex["steamLoginPending"]["response"]);
+        assert_eq!(pending.status, "pending");
+        let dev: LoginDone = shape(&ex["steamLoginDone"]["response"]);
+        assert_eq!(dev.player.nick, start_req.nick);
         assert!(dev.token.starts_with("dev_"));
+        let req = dev.player.clone();
+        let devices: DeviceList = shape(&ex["devices"]["response"]);
+        assert!(devices.devices[0].current);
 
         let inv: Invite = shape(&ex["createInvite"]["response"]);
         assert_eq!(inv.code, "ENSH-7KQ2");
@@ -227,7 +270,10 @@ mod tests {
         let up: UploadResponse = shape(&ex["uploadDiverged"]["response"]);
         assert!(up.diverged);
         assert_eq!(up.head.as_deref(), Some(head.version_id.as_str()));
-        assert!(up.version.is_none());
+        let stored = up.version.as_ref().expect("the stored version");
+        assert_eq!(stored.sha256, headers.sha256);
+        assert_eq!(stored.sha256.len(), 64, "X-Sha256 is 64 hex of the body");
+        assert_eq!(stored.parent, headers.parent);
 
         let presence: Presence = shape(&ex["presence"]["response"]);
         assert_eq!(presence.players.len(), 2);

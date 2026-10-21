@@ -74,7 +74,15 @@ pub fn avatar_path(steam_root: &Path, steam_id: &str) -> PathBuf {
     steam_root.join("config").join("avatarcache").join(format!("{steam_id}.png"))
 }
 
-/// `userdata/<accountId>/1203620/remote`, where Enshrouded keeps its saves (Steam Cloud's folder).
+/// Enshrouded 1.0's local saves, `<Saved Games>\keen games\Enshrouded\default` (plain files, no Steam Cloud). This is
+/// the folder shared worlds live in: slot discovery, pull and upload all happen here. (A world copied into the Steam
+/// Cloud folder is invisible in-game: the game lists those through Steam's remote storage API.)
+pub fn local_save_dir(saved_games: &Path) -> PathBuf {
+    saved_games.join("keen games").join("Enshrouded").join("default")
+}
+
+/// `userdata/<accountId>/1203620/remote`, where Enshrouded keeps its Steam Cloud saves. Only read, to list the
+/// player's cloud worlds when sharing one (it is copied into a local slot first).
 pub fn save_dir(steam_root: &Path, user: &SteamUser) -> PathBuf {
     steam_root.join("userdata").join(user.account_id.to_string()).join(APP_ID).join("remote")
 }

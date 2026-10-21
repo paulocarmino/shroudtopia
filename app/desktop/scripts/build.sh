@@ -52,7 +52,7 @@ echo "==> [0/3] Copying the sources to $STAGE ..."
 mkdir -p "$STAGE/app/desktop" "$STAGE/out"
 # node_modules, .svelte-kit and build stay in the stage between runs (excluded, so --delete leaves them alone)
 rsync -a --delete \
-    --exclude node_modules --exclude .svelte-kit --exclude /build --exclude /dist --exclude target \
+    --exclude node_modules --exclude .svelte-kit --exclude /build --exclude /dist --exclude target --exclude /src-tauri/gen \
     "$DESKTOP/" "$STAGE/app/desktop/"
 # the contract the core's tests read (crates/shroudtopia-core reaches ../../../contract.example.json)
 cp "$APP/contract.example.json" "$APP/CONTRACT.md" "$STAGE/app/"
@@ -70,9 +70,11 @@ docker run --rm \
     -v shroudtopia-target:/target \
     -e XWIN_CACHE_DIR=/xwin \
     -e CARGO_TARGET_DIR=/target \
-    -e TEST="$TEST" -e EXE="$EXE" -e ICONS="$ICONS" -e TARGET="$TARGET" \
+    -e TEST="$TEST" -e EXE="$EXE" -e ICONS="$ICONS" -e TARGET="$TARGET" -e OWNER="$(id -u):$(id -g)" \
     "$IMAGE" \
     bash -c 'set -euo pipefail
+        # what the container writes in the stage goes back to the WSL user, so the next rsync can update it
+        trap "chown -R \"\$OWNER\" /work" EXIT
         if [ "$ICONS" = 1 ]; then
             echo "==> icons from logo_square.png"
             (cd src-tauri && cargo tauri icon /work/logo_square.png -o icons >/dev/null)
