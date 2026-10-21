@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shroudtopia</title>
+<meta name="description" content="Mods e mundo compartilhado para Enshrouded. Quem chegar primeiro abre o mundo; quando fecha, ele fica pronto no PC do amigo.">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+/* Art direction V2 (app/plans/ui-redesign-v2/kit): slate base, ivory text, ember for the one action, the valley as the place. */
+:root {
+  --bg: #101519; --surface: #1b2329; --surface-2: #232d34; --line: #3b4851; --control-line: #81939d;
+  --text: #f2e9d8; --text-2: #b9c4c8; --muted: #96a5ad;
+  --ember: #dda15a; --ember-hover: #edb777; --ember-pressed: #c88b45; --ink: #171b1d; --shroud: #9acbd8;
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --display: Georgia, "Times New Roman", serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 var(--font); -webkit-font-smoothing: antialiased; }
+a { color: var(--shroud); }
+:focus-visible { outline: 2px solid var(--shroud); outline-offset: 3px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-inline: max(20px, env(safe-area-inset-left, 0px)); }
+
+/* hero: the valley sits at the bottom, its dark sky carries the text */
+.hero { position: relative; isolation: isolate; display: flex; flex-direction: column; overflow: hidden;
+  /* the valley keeps its 3:2 and sets the hero's height; the copy sits in its dark sky, the ruins show below it */
+  min-height: max(640px, calc(min(100vw, 1600px) * 2 / 3)); }
+.hero .scene { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.hero .scene img { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: max(100%, 960px); max-width: 1600px; height: auto; opacity: .92;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30%); mask-image: linear-gradient(to bottom, transparent 0, #000 30%); }
+.hero .scene::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, var(--bg) 0, rgb(16 21 25 / .55) 38%, transparent 60%); z-index: 1; }
+.hero .scene::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(to bottom, transparent, var(--bg)); }
+header.top { display: flex; align-items: center; justify-content: space-between; padding-block: 22px; }
+header.top img { width: 184px; height: auto; display: block; }
+header.top a { font-size: 14px; color: var(--text-2); text-decoration: none; }
+header.top a:hover { color: var(--text); }
+.hero-copy { padding-block: 40px 0; max-width: 640px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(32px, 4.2vw, 46px); line-height: 1.1; margin: 0 0 18px; text-wrap: balance; }
+.lead { font-size: 18px; color: var(--text-2); margin: 0 0 30px; max-width: 54ch; }
+.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; height: 50px; padding: 0 26px; border-radius: 6px; background: var(--ember); color: var(--ink);
+  font-weight: 700; font-size: 16px; text-decoration: none; border: 0; transition: background .14s; }
+.btn:hover { background: var(--ember-hover); }
+.btn:active { background: var(--ember-pressed); }
+.btn svg { width: 18px; height: 18px; }
+.btn[aria-disabled="true"] { background: var(--surface-2); color: var(--muted); pointer-events: none; }
+.cta .meta { font-size: 14px; color: var(--muted); }
+
+/* sections */
+section { padding-block: 72px; }
+h2 { font-family: var(--display); font-size: 28px; margin: 0 0 28px; }
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.feature { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 22px; }
+.feature .ico { width: 36px; height: 36px; border-radius: 6px; display: grid; place-items: center; background: #332b23; color: var(--ember); margin-bottom: 14px; }
+.feature .ico svg { width: 18px; height: 18px; }
+.feature .ico.shroud { background: #20323b; color: var(--shroud); }
+.feature h3 { font-size: 17px; margin: 0 0 6px; }
+.feature p { margin: 0; color: var(--text-2); font-size: 15px; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: s; list-style: none; padding: 0; margin: 0; }
+.steps li { counter-increment: s; border-top: 2px solid var(--line); padding-top: 16px; color: var(--text-2); font-size: 15px; }
+.steps li::before { content: counter(s); display: block; font-family: var(--display); font-size: 28px; color: var(--ember); line-height: 1; margin-bottom: 10px; }
+.steps li b { display: block; color: var(--text); font-size: 16px; margin-bottom: 4px; }
+.world { display: grid; grid-template-columns: 96px 1fr; gap: 24px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 24px; }
+.world img { width: 96px; height: 96px; display: block; }
+.world h3 { margin: 0 0 6px; font-size: 18px; }
+.world p { margin: 0; color: var(--text-2); }
+.note { margin-top: 18px; font-size: 14px; color: var(--muted); max-width: 70ch; }
+footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+@media (max-width: 760px) {
+  .features, .steps { grid-template-columns: 1fr; }
+  .hero-copy { padding-top: 24px; }
+  .world { grid-template-columns: 64px 1fr; }
+  .world img { width: 64px; height: 64px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="scene" aria-hidden="true">
+    <img src="assets/mist-valley.jpg" srcset="assets/mist-valley-768.jpg 768w, assets/mist-valley.jpg 1536w" sizes="(max-width: 768px) 1100px, 100vw" alt="">
+  </div>
+  <div class="wrap">
+    <header class="top">
+      <img src="assets/shroudtopia-logo.svg" alt="Shroudtopia">
+      <a href="https://github.com/paulocarmino/shroudtopia">GitHub</a>
+    </header>
+    <div class="hero-copy">
+      <h1>Um mundo de Enshrouded, dois PCs, sempre em dia.</h1>
+      <p class="lead">Quem chegar primeiro abre o mundo e o outro entra pela Steam. Quando o host fecha o jogo, o mundo sobe e fica pronto no PC do amigo. E os mods se ligam com um clique.</p>
+      <div class="cta">
+        <a class="btn" id="download" href="https://github.com/paulocarmino/shroudtopia/releases/latest/download/Shroudtopia.exe">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+          Baixar para Windows
+        </a>
+        <span class="meta" id="version">App portátil, sem instalador</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+  <section>
+    <h2>O que ele faz</h2>
+    <div class="features">
+      <div class="feature">
+        <div class="ico shroud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></svg></div>
+        <h3>Mundo compartilhado</h3>
+        <p>O mundo fica salvo no servidor e no PC de cada um. Ninguém precisa deixar o jogo aberto para o outro jogar.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v7h-3a2 2 0 1 0 0 4h3v7h-7v-3a2 2 0 1 0-4 0v3H3v-7h3a2 2 0 1 0 0-4H3V3z"/></svg></div>
+        <h3>Mods na hora</h3>
+        <p>Sem gasto de stamina, sem dano de queda, voo, primeira pessoa. Liga e desliga direto no app, até com o jogo aberto.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></div>
+        <h3>Sempre atualizado</h3>
+        <p>Quando sai versão nova dos mods ou do app, ele avisa e instala sozinho assim que você fecha o jogo.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Como começar</h2>
+    <ol class="steps">
+      <li><b>Baixe e abra o app</b>Ele acha o Enshrouded e os seus mundos sozinho.</li>
+      <li><b>Entre com a Steam</b>O navegador abre na página oficial da Steam; você confirma e volta.</li>
+      <li><b>Compartilhe ou cole o código</b>Um escolhe o mundo e manda o código; o outro cola e o mundo aparece no jogo.</li>
+    </ol>
+    <div class="world" style="margin-top:32px">
+      <img src="assets/world-medallion.png" alt="" aria-hidden="true">
+      <div>
+        <h3>Se os dois jogarem separados, nada se perde</h3>
+        <p>O app mostra as duas versões e você escolhe qual segue. A outra fica guardada no histórico do mundo.</p>
+      </div>
+    </div>
+    <p class="note">O app ainda não tem assinatura digital. Na primeira vez, o Windows pode mostrar "O Windows protegeu o computador": clique em <b>Mais informações</b> e depois em <b>Executar assim mesmo</b>.</p>
+  </section>
+
+  <footer>
+    <span>Shroudtopia é um projeto de fã e não tem ligação com a Keen Games.</span>
+    <span><a href="https://github.com/paulocarmino/shroudtopia">Código no GitHub</a></span>
+  </footer>
+</main>
+
+<script>
+// The button always points at the latest release's exe; this only fills in the version, or says there is none yet.
+fetch("https://api.github.com/repos/paulocarmino/shroudtopia/releases/latest")
+  .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+  .then((rel) => {
+    const exe = (rel.assets || []).find((a) => /\.exe$/i.test(a.name));
+    if (exe) document.getElementById("download").href = exe.browser_download_url;
+    document.getElementById("version").textContent = `Versão ${rel.tag_name.replace(/^v/, "")} · app portátil, sem instalador`;
+  })
+  .catch((status) => {
+    if (status !== 404) return;
+    const b = document.getElementById("download");
+    b.setAttribute("aria-disabled", "true");
+    b.removeAttribute("href");
+    document.getElementById("version").textContent = "A primeira versão sai em breve";
+  });
+</script>
+</body>
+</html>
