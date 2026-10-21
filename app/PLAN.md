@@ -30,13 +30,18 @@ The UI is not built until Paulo approves a layout in `plans/ui-prototipo/index.h
 - **Pairing by code**: share a world → code like `ENSH-7KQ2` (24 h, one use) → the friend pastes it
   and the world lands in a free save slot on their PC.
 
-## Risks to settle in the first spike
+## Spike results (2026-10-21)
 
-1. **Steam Cloud.** Saves live in `Steam/userdata/<id>/1203620/remote/`, Steam's cloud folder. A
-   file written there while the game is closed may be reverted by Steam or trigger its conflict
-   dialog at launch. Test before anything else; fallback is "turn Steam Cloud off for Enshrouded".
-2. **Slot identity.** Worlds are `world0.ksd`, `world1.ksd`… per PC, and `global.ksd` is rewritten
-   with them and may index the slots. Test: copy a world into a free slot, launch, read
-   `enshrouded.log`.
-3. **Pull window.** Without the loader hook, a pull must finish before the world is clicked. Fine
-   at today's sizes (150 KB – 1.8 MB); "Jogar" in the app removes the race.
+1. **Steam Cloud slots are closed to us.** The game lists Steam saves through Steam's remote
+   storage API: a `world2.ksd` copied into `userdata/<id>/1203620/remote/` stayed "Espaço Vazio".
+2. **Local saves work.** Enshrouded 1.0 has a "Jogos salvos: Local" tab backed by plain files in
+   `%USERPROFILE%\Saved Games\keen games\Enshrouded\default\worldN.ksd`. A copied `world0.ksd`
+   showed up there as slot 1 with its name. Shared worlds live in that folder; the player's own
+   Steam worlds are only read (to offer one for sharing, copied into a free local slot).
+3. **Steam slots work through the Steam API.** With the game closed, the app loads the game's own
+   `steam_api64.dll` as app 1203620 (`SteamAPI_InitFlat`, `ISteamRemoteStorage` v016) and calls
+   `FileWrite("world2.ksd", …)`: Steam tracks the file (`remotecache.vdf`), uploads it to Steam
+   Cloud, and the game lists it in "Jogos salvos: Steam" (confirmed in-game). Steam shows
+   "playing Enshrouded" for the few seconds this takes. **Steam is the default store for a shared
+   world; Local is a per-world option.**
+4. **Pull window.** "Jogar" in the app pulls first, then launches the game.
