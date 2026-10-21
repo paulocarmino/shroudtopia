@@ -108,7 +108,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return id
   }
 
-  app.get('/healthz', async () => ({ ok: true, build: options.build ?? 'dev' }))
+  // the probes call this every few seconds: not logged
+  app.get('/healthz', { logLevel: 'silent' }, async () => ({ ok: true, build: options.build ?? 'dev' }))
 
   // ---- devices
 
