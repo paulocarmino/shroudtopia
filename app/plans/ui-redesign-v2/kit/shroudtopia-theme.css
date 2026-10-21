@@ -1,0 +1,57 @@
+/* Referência de aparência. Importar não conecta estes tokens aos componentes existentes. */
+/* Aplicar dentro da raiz visual do app; não altera layout, rotas ou regras de negócio. */
+.shroudtopia-theme {
+  color-scheme: dark;
+  --st-bg: #101519;
+  --st-sidebar: #13191e;
+  --st-panel: #1b2329;
+  --st-panel-raised: #232d34;
+  --st-hover: #2b363e;
+  --st-line: #3b4851;
+  --st-control-line: #81939d;
+  --st-text: #f2e9d8;
+  --st-text-secondary: #b9c4c8;
+  --st-text-muted: #96a5ad;
+  --st-ember: #dda15a;
+  --st-ember-hover: #edb777;
+  --st-ember-pressed: #c88b45;
+  --st-ember-soft: #332b23;
+  --st-shroud: #9acbd8;
+  --st-shroud-hover: #b3dce5;
+  --st-shroud-pressed: #81b7c7;
+  --st-shroud-soft: #20323b;
+  --st-success: #92bd9b;
+  --st-success-soft: #23372c;
+  --st-warning: #e5c16b;
+  --st-warning-soft: #3a3323;
+  --st-danger: #ec9690;
+  --st-danger-soft: #3d2729;
+  --st-ink: #171b1d;
+  --st-disabled-bg: #30393f;
+  --st-disabled-text: #96a5ad;
+  --st-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --st-font-mono: Consolas, "Cascadia Code", monospace;
+  --st-font-display: Georgia, "Times New Roman", serif;
+  --st-radius-card: 8px;
+  --st-radius-control: 6px;
+  --st-radius-badge: 4px;
+  --st-shadow-panel: 0 6px 18px rgb(0 0 0 / 14%);
+  --st-focus: 0 0 0 2px var(--st-bg), 0 0 0 4px var(--st-shroud);
+  --st-duration: 140ms;
+  --st-ease: cubic-bezier(.2, .7, .2, 1);
+}
+
+/* Classes optativas: adaptar nomes ao projeto. Nenhuma regra global em button/div. */
+.st-brand-logo {
+  display: block;
+  width: 176px;
+  height: auto;
+  max-width: 100%;
+}
+.st-brand-mark { display: block; width: 24px; height: 24px; flex: 0 0 auto; }
+.st-focusable:focus-visible { outline: 2px solid var(--st-shroud); outline-offset: 3px; }
+.st-ambient { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .shroudtopia-theme { --st-duration: 0ms; }
+}

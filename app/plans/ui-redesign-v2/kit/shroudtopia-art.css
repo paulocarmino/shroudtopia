@@ -1,0 +1,88 @@
+/* Referência V2: adaptar nomes/estrutura aos componentes reais. */
+/* Importe após shroudtopia-theme.css. Associe os arquivos por imports/recursos do projeto. */
+
+.st-art-main {
+  position: relative;
+  isolation: isolate;
+  background: var(--st-bg, #101519);
+}
+
+/* Camada separada: o recorte não deve cortar foco ou conteúdo dos controles. */
+.st-art-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.st-art-scene__image {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: .9;
+  pointer-events: none;
+  /* Preservar 3:2: não forçar height:100%, cover ou filtro escuro global. */
+}
+
+/* Só o invólucro de conteúdo apropriado; não aplicar genericamente a todos os filhos. */
+.st-art-content {
+  position: relative;
+  z-index: 1;
+}
+
+.st-art-sidebar { position: relative; isolation: isolate; }
+
+.st-art-shrine {
+  position: absolute;
+  left: 50%;
+  bottom: 140px;
+  transform: translateX(-50%);
+  display: block;
+  width: 138px;
+  height: auto;
+  opacity: .96;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.st-world-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.st-world-medallion {
+  display: block;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* No contêiner existente da marca: centralizar sem deslocar a navegação. */
+.st-brand-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.st-brand-logo {
+  display: block;
+  width: 184px;
+  height: auto;
+  max-width: 100%;
+  /* O intervalo símbolo/nome e seu alinhamento já estão dentro do SVG/PNG. */
+}
+
+/* Exemplo de adaptação; usar altura real do painel se o framework oferecer isso. */
+@media (max-height: 560px) { .st-art-shrine { width: 110px; } }
+@media (max-height: 500px) { .st-art-shrine { display: none; } }
