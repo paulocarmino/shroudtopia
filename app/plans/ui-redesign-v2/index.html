@@ -699,3 +699,37 @@ document.addEventListener('click', e => {
 });
 render();
 </script>
+
+<script>
+// Several shared worlds (asked by Paulo 2026-10-21): one history card per world, sessions grouped, two actions below.
+SWITCHES.splice(1, 0, { key: 'worlds', label: 'Mundos', opts: [['many', 'Vários mundos'], ['one', 'Um mundo (hoje)']] });
+if (!S.worlds) S.worlds = 'many';
+const VOID = '† THE VOID †';
+function multiCard(name, tone, status, sub, action, rows, current) {
+  const medal = (worldHistory().match(/<img class="st-medal"[^>]*>/) || [''])[0];
+  const r = rows.map((x, i) => `<div class="hist-row${i === 0 && current ? ' current' : ''}">
+    <span class="avatar ${x[0] === 'me' ? 'me' : 'friend'}">${x[0] === 'me' ? MEI : 'T'}</span>
+    <span><b style="font-weight:500">${x[1]}</b> <span class="when">· ${x[2]}</span></span>
+    <span class="tags">${x[4].map(t => `<span class="tag ${t}">${TAGTXT[t]}</span>`).join('')}</span>
+    <span class="size">${x[3]}</span></div>`).join('');
+  return `<div class="card">
+    <div class="w2-head">${S.skin === 'st' ? medal : ''}<div class="txt"><h3>${name}</h3>${st(tone, status)}<div class="meta" style="margin-top:2px"><span>${sub}</span></div></div>${btnSm(action)}</div>
+    <div class="hist">${r}</div></div>`;
+}
+const secWorldOne = secWorld;
+secWorld = function () {
+  if (S.worlds !== 'many') return secWorldOne();
+  const a = multiCard('CopyWithGabe', 'ok', 'Em dia', `com ${VOID}`, { label: 'Jogar', icon: 'play', cls: 'primary' }, [
+    ['me', 'Você', 'hoje, 18:59 – 19:42', '1,6 MB', ['here', 'cloud']],
+    ['fr', VOID, 'ontem, 22:10 – 23:55', '1,6 MB', []],
+    ['me', 'Você', 'ontem, 14:02 – 17:15', '1,5 MB', []]], true);
+  const b = multiCard('RunWithGabe1.0', 'friend', `${VOID} está hospedando`, `com ${VOID}`, { label: 'Entrar pelo Steam', icon: 'join', cls: 'friend' }, [
+    ['fr', VOID, 'hoje, desde 20:15', '—', ['friendlive']],
+    ['me', 'Você', 'hoje, 17:30 – 18:40', '193 KB', ['here', 'cloud']]], true);
+  const actions = `<div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn">${ICON.plus.replace('<svg', '<svg style="width:15px;height:15px"')}Compartilhar outro mundo</button>
+    <button class="btn">${ICON.link.replace('<svg', '<svg style="width:15px;height:15px"')}Tenho um código</button></div>`;
+  return `<div class="sec"><div class="sec-title"><h2>Mundos compartilhados</h2><span class="aside">2 mundos</span></div>${a}${b}${actions}</div>`;
+};
+render();
+</script>
