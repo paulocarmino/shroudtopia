@@ -313,7 +313,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 <div class="page">
   <header class="proto-head">
     <h1>Shroudtopia, protótipo do app</h1>
-    <p>Janela do .exe no tema do OrangeMacros. Cada linha abaixo troca uma parte da tela. Layout fechado: barra lateral.</p>
+    <p>Janela do .exe no tema do OrangeMacros. Cada linha abaixo troca uma parte da tela. Fechado: barra lateral, card do mundo com histórico, mods que expandem.</p>
   </header>
   <div class="switches" id="switches"></div>
   <div class="stage"><div class="win" id="win"></div></div>
@@ -345,9 +345,7 @@ const ICON = {
 const SWITCHES = [
   { key: 'screen', label: 'Tela', opts: [['main', 'Principal'], ['first', 'Primeiro uso']] },
   { key: 'tab', label: 'Aba aberta', opts: [['world', 'Mundo'], ['mods', 'Mods'], ['update', 'Atualização']], when: s => s.screen === 'main' },
-  { key: 'world', label: 'Card do mundo', opts: [['status', '1 · Status grande'], ['history', '2 · Histórico'], ['pcs', '3 · Dois PCs'], ['row', '4 · Linha compacta']], when: s => s.screen === 'main' },
   { key: 'sync', label: 'Estado do sync', opts: [['sync', 'Em dia'], ['me', 'Você hospedando'], ['friend', 'Amigo hospedando'], ['behind', 'Baixando do amigo'], ['up', 'Enviando'], ['diverged', 'Divergiu'], ['offline', 'Sem servidor']], when: s => s.screen === 'main' },
-  { key: 'mods', label: 'Lista de mods', opts: [['expand', 'Expande por mod'], ['flat', 'Tudo aberto']], when: s => s.screen === 'main' },
   { key: 'upd', label: 'Atualização', opts: [['ok', 'Em dia'], ['avail', 'Disponível'], ['blocked', 'Jogo aberto'], ['installing', 'Instalando']], when: s => s.screen === 'main' },
   { key: 'step', label: 'Passo', opts: [['choose', 'Escolher'], ['slot', 'Qual mundo'], ['code', 'Código criado'], ['paste', 'Colar código']], when: s => s.screen === 'first' },
 ];
@@ -355,7 +353,7 @@ const SWITCHES = [
 const DEFAULTS = { screen: 'main', layout: 'side', tab: 'world', world: 'status', sync: 'sync', mods: 'expand', upd: 'ok', step: 'choose' };
 let S = { ...DEFAULTS };
 try { Object.assign(S, JSON.parse(localStorage.getItem('shroud-proto') || '{}')); } catch (e) {}
-S.layout = 'side';
+S.layout = 'side'; S.world = 'history'; S.mods = 'expand';
 const save = () => { try { localStorage.setItem('shroud-proto', JSON.stringify(S)); } catch (e) {} };
 
 /* ---------- data (world numbers read from this PC on 2026-10-21) ---------- */
