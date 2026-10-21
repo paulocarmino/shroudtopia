@@ -56,8 +56,21 @@
     }
   },
   "uploadDiverged": {
-    "requestHeaders": { "X-Parent": "01JB7ZZZZZZZZZZZZZZZZZZZZZ", "X-Sha256": "aa11", "X-Started-At": "2026-10-21T19:00:00.000Z", "X-Ended-At": "2026-10-21T20:30:00.000Z" },
-    "response": { "diverged": true, "head": "01JB80AAAAAAAAAAAAAAAAAAAA" }
+    "requestHeaders": { "X-Parent": "01JB7ZZZZZZZZZZZZZZZZZZZZZ", "X-Sha256": "aa11000000000000000000000000000000000000000000000000000000000000", "X-Started-At": "2026-10-21T19:00:00.000Z", "X-Ended-At": "2026-10-21T20:30:00.000Z" },
+    "response": {
+      "version": {
+        "versionId": "01JB8F0000000000000000000B",
+        "parent": "01JB7ZZZZZZZZZZZZZZZZZZZZZ",
+        "uploadedBy": "76561198065863968",
+        "size": 1796230,
+        "sha256": "aa11000000000000000000000000000000000000000000000000000000000000",
+        "startedAt": "2026-10-21T19:00:00.000Z",
+        "endedAt": "2026-10-21T20:30:00.000Z",
+        "createdAt": "2026-10-21T20:30:04.000Z"
+      },
+      "diverged": true,
+      "head": "01JB80AAAAAAAAAAAAAAAAAAAA"
+    }
   },
   "presence": {
     "response": {

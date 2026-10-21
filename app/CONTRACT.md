@@ -62,8 +62,35 @@ request/response per route; each side's tests read it, so a change here breaks b
 | DELETE | `/api/worlds/:id/lock` | | `204` |
 | POST | `/api/worlds/:id/resolve` | `{ versionId }` | `World` |
 | GET | `/api/presence` | | `{ players: [{ steamId, nick, appOnline, inGame }] }` (members of the caller's worlds; `appOnline` = a request in the last 2 min) |
+| GET | `/api/players/:steamId/avatar` | | PNG bytes, or `404` (self or someone who shares a world with the caller) |
 
 Errors are `{ error: "<code>", message }` with a fitting status.
+
+### Details the server settles (as built in `app/server`)
+
+- Success is `200` with JSON unless the table says `204`. Every route but `POST /api/devices` and `/healthz`
+  needs the bearer token (`401 unauthorized` otherwise).
+- A world the caller is not a member of answers `404 world_not_found`, as if it did not exist.
+- **Upload headers**: `X-Sha256` is required and checked against the body (`400 sha256_mismatch`). `X-Parent`
+  absent, empty or `null` means no parent. A parent that is not a version of this world is `400 unknown_parent`.
+  `X-Started-At` / `X-Ended-At` are ISO 8601; absent means `null` (an autosave has no `endedAt`). The answer's
+  `head` is the head's **versionId** (a string, or `null`), `version` is the stored Version.
+- **diverged** is set whenever an upload is stored as a branch and is cleared only by `resolve`: an upload on head
+  after that moves head but leaves `diverged: true`. `resolve` with a versionId not of this world is
+  `400 unknown_version`.
+- The file download carries `X-Sha256` and `X-Version-Id` headers.
+- **Lock**: `POST /lock` by the holder renews it (same `since`). The heartbeat renews when the caller holds it,
+  takes it when it is free or expired, and is `409 { lock }` when someone else holds it. `DELETE /lock` is `204`
+  when the caller held it or nobody did, `409 { lock }` when someone else does. A `409` body also carries
+  `error: "lock_held"` and `message`. `inGame` in presence = holds an unexpired lease on any world.
+- **Invites**: the 4 characters come from `23456789ABCDEFGHJKMNPQRSTUVWXYZ`. Redeem accepts any case and the code
+  with or without `ENSH-`. Unknown `404 invite_not_found`, spent `410 invite_used`, expired `410 invite_expired`.
+  A caller who is already a member gets the world back and the code is not spent. Ten wrong codes in 10 minutes
+  from one device are `429 too_many_attempts`.
+- `steamId` is 17 digits; `nick` up to 64 characters, `name` up to 80. Each `POST /api/devices` issues a new
+  token and updates the player's nick. World files up to 64 MB, avatars up to 512 KB (PNG signature checked).
+- Known gap: `POST /api/devices` trusts the `steamId` it is sent (no Steam-side check), so whoever knows a
+  member's steamid64 can get a token as them.
 
 ## What the app does with the files (not the server's business, but fixed here)
 
