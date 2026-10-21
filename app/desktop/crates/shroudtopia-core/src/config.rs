@@ -88,7 +88,15 @@ pub struct AppConfig {
     pub token: Option<String>,
     pub player: Option<Player>,
     pub avatar_sent: bool,
+    /// The shared worlds of this PC (several since 0.1.4), each with its own slot, chain, queue and lease.
+    pub worlds: Vec<WorldLink>,
+    /// The world the engine is working on at the moment: a copy of one of `worlds` (engine.rs `select`), written
+    /// back into the list before every save. Never saved itself.
+    #[serde(skip)]
     pub world: Option<WorldLink>,
+    /// The single world of a config saved by 0.1.3 or older; `load` moves it into `worlds`.
+    #[serde(rename = "world", skip_serializing)]
+    legacy_world: Option<WorldLink>,
     /// chosen by hand ("Trocar"); otherwise found through Steam
     pub game_folder: Option<PathBuf>,
     /// the release tag of the mods installed by this app
@@ -103,7 +111,9 @@ impl Default for AppConfig {
             token: None,
             player: None,
             avatar_sent: false,
+            worlds: Vec::new(),
             world: None,
+            legacy_world: None,
             game_folder: None,
             mods_version: None,
             last_update_check: None,
@@ -134,6 +144,12 @@ impl ConfigStore {
                     // the API left the landing page's host on 2026-10-21; a config saved before that still names it
                     if cfg.server_url.trim().is_empty() || cfg.server_url.trim_end_matches('/') == OLD_SERVER_URL {
                         cfg.server_url = SERVER_URL.into();
+                    }
+                    // one world (0.1.3 and older) becomes the first of the list
+                    if let Some(old) = cfg.legacy_world.take() {
+                        if !cfg.worlds.iter().any(|w| w.world_id == old.world_id) {
+                            cfg.worlds.insert(0, old);
+                        }
                     }
                     cfg
                 }
@@ -167,8 +183,9 @@ mod tests {
         assert_eq!(store.load(), AppConfig::default());
         let mut cfg = AppConfig::default();
         cfg.token = Some("dev_x".into());
-        cfg.world = Some(WorldLink { world_id: "w".into(), name: "n".into(), store: Default::default(), slot: 2, base: Some("v".into()), base_sha256: None, base_stat: Some(Stat { size: 1, mtime: 2 }), pending: None, branch: None, session: None });
+        cfg.worlds.push(WorldLink { world_id: "w".into(), name: "n".into(), store: Default::default(), slot: 2, base: Some("v".into()), base_sha256: None, base_stat: Some(Stat { size: 1, mtime: 2 }), pending: None, branch: None, session: None });
         store.save(&cfg).unwrap();
+        assert!(!fs::read_to_string(store.path()).unwrap().contains("\"world\":"), "the old single field is not written");
         assert_eq!(store.load(), cfg);
         fs::write(store.path(), "{").unwrap();
         assert_eq!(store.load(), AppConfig::default());
@@ -181,5 +198,25 @@ mod tests {
         assert_eq!(store.load().server_url, SERVER_URL);
         fs::write(store.path(), r#"{"serverUrl":"http://localhost:8790"}"#).unwrap();
         assert_eq!(store.load().server_url, "http://localhost:8790");
+    }
+
+    /// A config written by 0.1.3 (one `world`) loads as a list of one, with every field of it.
+    #[test]
+    fn a_single_world_config_migrates_into_the_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ConfigStore::new(dir.path());
+        fs::write(
+            store.path(),
+            r#"{"serverUrl":"https://shroudtopia-api.paulocarmino.com","token":"dev_1","world":{"worldId":"w1","name":"CopyWithGabe","store":"steam","slot":2,"base":"v9","baseSha256":"ab","pending":null,"branch":null}}"#,
+        )
+        .unwrap();
+        let cfg = store.load();
+        assert_eq!(cfg.worlds.len(), 1);
+        let w = &cfg.worlds[0];
+        assert_eq!((w.world_id.as_str(), w.name.as_str(), w.slot, w.base.as_deref()), ("w1", "CopyWithGabe", 2, Some("v9")));
+        assert!(cfg.world.is_none());
+        store.save(&cfg).unwrap();
+        let again = store.load();
+        assert_eq!(again.worlds, cfg.worlds, "saved as the list from then on");
     }
 }
