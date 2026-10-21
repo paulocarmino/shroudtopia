@@ -67,12 +67,13 @@ Errors are `{ error: "<code>", message }` with a fitting status.
 
 ## What the app does with the files (not the server's business, but fixed here)
 
-- The app maps `worldId → local slot` per PC (`world0.ksd`…`world9.ksd`) in its own config. Only
+- The app maps `worldId → local slot` per PC (`world0.ksd`…`world9.ksd` in the local saves folder) in its own config. Only
   that file is synced. `global.ksd`, `characterN.ksd`, `user_settings.json` and `backup/` are never
   touched.
 - Upload trigger: watch the slot file; after a write, wait until size and mtime are unchanged for
   5 s, then upload. Final upload when `enshrouded.exe` exits.
 - Pull: only while the game is closed, write to a temp file in the same folder, then replace.
   Keep the replaced file as `<slot>.ksd.shroudtopia-<versionId>` in the app's own backup folder.
-- **Steam Cloud**: the save folder is tracked by Steam (`remotecache.vdf`, sha per file). How
-  Steam reacts to a pull is settled by the spike in `PLAN.md`; the app follows its result.
+- **Folder**: shared worlds live in the local saves folder
+  `%USERPROFILE%\Saved Games\keen games\Enshrouded\default\`, never in Steam's cloud folder (the
+  game does not see files Steam did not write there; see PLAN.md spike results).
