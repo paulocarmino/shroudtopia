@@ -978,6 +978,11 @@ impl Engine {
         Ok(())
     }
 
+    /// Gives the lease back now (the app is quitting with the game closed).
+    pub fn forget_lock(&mut self) {
+        self.release();
+    }
+
     /// Stops sharing on this PC: forgets the world (the save file and the server's copy stay).
     pub fn forget_world(&mut self) {
         self.release();

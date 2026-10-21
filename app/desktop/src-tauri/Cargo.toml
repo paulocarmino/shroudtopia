@@ -25,6 +25,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 shroudtopia-core = { path = "../crates/shroudtopia-core" }
 shroudtopia-win = { path = "../crates/shroudtopia-win" }
 
