@@ -274,6 +274,14 @@ impl Engine {
     }
 
     fn note_api(&mut self, e: &ApiError) {
+        // a revoked device (logged out elsewhere, or removed): back to "Entrar com a Steam"
+        if e.status() == Some(401) && self.cfg.token.is_some() {
+            self.cfg.token = None;
+            self.api.set_token(None);
+            self.rt.lock_mine = false;
+            self.rt.login_error = Some("Este PC saiu da conta. Entre com a Steam de novo.".into());
+            self.save();
+        }
         if e.is_offline() {
             self.rt.online = false;
         } else {
