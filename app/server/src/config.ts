@@ -11,6 +11,8 @@ export interface Config {
   host: string
   /** SQLite (metadata) lives here; without S3 the blobs do too (development only) */
   dataDir: string
+  /** scheme://host[:port], no trailing slash: the Steam login's return_to and realm are built from it */
+  publicOrigin: string
   /** how many proxies stand in front (1 behind Envoy) */
   trustProxy: number
   /** the commit the image was built from, or "dev" */
@@ -61,8 +63,18 @@ function s3Settings(env: Env): S3Settings | null {
 
 export function loadConfig(env: Env = process.env): Config {
   const dataDir = env.SHROUDTOPIA_DATA_DIR || 'data'
+  const port = integer(env, 'PORT', 8800, 0, 65535)
+  let publicOrigin: string
+  try {
+    const url = new URL(env.SHROUDTOPIA_PUBLIC_ORIGIN || `http://localhost:${port}`)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error()
+    publicOrigin = url.origin
+  } catch {
+    throw new Error('SHROUDTOPIA_PUBLIC_ORIGIN must be an http(s) URL')
+  }
   return {
-    port: integer(env, 'PORT', 8800, 0, 65535),
+    port,
+    publicOrigin,
     host: env.HOST || '127.0.0.1',
     dataDir: isAbsolute(dataDir) ? dataDir : resolve(PACKAGE_DIR, dataDir),
     trustProxy: integer(env, 'SHROUDTOPIA_TRUST_PROXY', 0, 0, 8),

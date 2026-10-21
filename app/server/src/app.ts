@@ -4,11 +4,16 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import secureJson from 'secure-json-parse'
 import { ULID, ulid } from './ids.ts'
 import { avatarKey, worldFileKey, type ObjectStore } from './object-store.ts'
+import { donePage, failPage, SteamLoginError, steamLoginUrl, verifySteamAssertion, type SteamSettings } from './steam.ts'
 import { SyncError, type Player, type Sync } from './sync.ts'
 
 export interface ServerOptions {
   sync: Sync
   store: ObjectStore
+  /** the public origin and Steam's OpenID endpoint */
+  steam: SteamSettings
+  /** login sessions one address may start per window */
+  loginStarts?: { max: number; windowMs: number }
   build?: string
   log?: boolean
   trustProxy?: number
@@ -27,6 +32,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     player: Player
     token: string
+    deviceId: string
   }
 }
 
@@ -95,9 +101,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   const authenticate = async (request: FastifyRequest) => {
     const auth = header(request, 'authorization')
     const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : undefined
-    const player = token ? sync.authenticate(token) : null
-    if (!token || !player) throw fail(401, 'unauthorized', 'a valid device token is required (Authorization: Bearer <token>)')
-    request.player = player
+    const found = token ? sync.authenticate(token) : null
+    if (!token || !found) throw fail(401, 'unauthorized', 'a valid device token is required (Authorization: Bearer <token>)')
+    request.player = found.player
+    request.deviceId = found.deviceId
     request.token = token
   }
 
@@ -111,17 +118,72 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   // the probes call this every few seconds: not logged
   app.get('/healthz', { logLevel: 'silent' }, async () => ({ ok: true, build: options.build ?? 'dev' }))
 
-  // ---- devices
+  // ---- Steam login: the only way to a device token (CONTRACT.md, "Steam login")
 
-  app.post('/api/devices', async request => {
-    const steamId = stringField(request.body, 'steamId', 32).trim()
-    if (!STEAM_ID.test(steamId)) throw fail(400, 'bad_request', 'steamId must be a steamid64 (17 digits)')
+  const startLimit = options.loginStarts ?? { max: 30, windowMs: 10 * 60_000 }
+  const starts = new Map<string, number[]>()
+
+  app.post('/api/auth/steam/start', async request => {
+    const now = Date.now()
+    const recent = (starts.get(request.ip) ?? []).filter(at => now - at < startLimit.windowMs)
+    if (recent.length >= startLimit.max) throw fail(429, 'too_many_attempts', 'too many logins started, wait a few minutes')
+    recent.push(now)
+    starts.set(request.ip, recent)
     const nick = stringField(request.body, 'nick', 64)
-    return sync.createDevice(steamId, nick)
+    const { sessionId, expiresAt } = sync.startLogin(nick)
+    return { sessionId, loginUrl: `${options.steam.origin}/auth/steam/redirect/${sessionId}`, expiresAt: new Date(expiresAt).toISOString() }
+  })
+
+  const html = (reply: FastifyReply, status: number, body: string) =>
+    reply.status(status).header('content-type', 'text/html; charset=utf-8').header('cache-control', 'no-store').send(body)
+
+  app.get('/auth/steam/redirect/:sessionId', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    if (!ULID.test(sessionId) || !sync.pendingLogin(sessionId)) return html(reply, 410, failPage('expired'))
+    return reply.header('cache-control', 'no-store').redirect(steamLoginUrl(options.steam, sessionId), 302)
+  })
+
+  app.get('/auth/steam/callback/:sessionId', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    if (!ULID.test(sessionId) || !sync.pendingLogin(sessionId)) return html(reply, 410, failPage('expired'))
+    try {
+      const { steamId, nonce } = await verifySteamAssertion(options.steam, sessionId, request.query as Record<string, unknown>, sync.now())
+      sync.completeLogin(sessionId, steamId, nonce)
+    } catch (error) {
+      if (error instanceof SteamLoginError) {
+        request.log.warn({ reason: error.reason, detail: error.message }, 'steam login refused')
+        return html(reply, error.reason === 'steam_unreachable' ? 502 : 400, failPage(error.reason))
+      }
+      if (error instanceof SyncError) {
+        request.log.warn({ reason: error.code }, 'steam login refused')
+        return html(reply, error.status, failPage(error.code))
+      }
+      throw error
+    }
+    return html(reply, 200, donePage())
+  })
+
+  app.get('/api/auth/steam/poll/:sessionId', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    if (!ULID.test(sessionId)) throw fail(404, 'login_not_found', 'no such login session')
+    const result = sync.pollLogin(sessionId)
+    return 'status' in result ? reply.status(202).send(result) : result
   })
 
   app.register(async authed => {
     authed.addHook('onRequest', authenticate)
+
+    // ---- devices and me
+
+    authed.get('/api/devices', async request => ({ devices: sync.devices(request.player.steamId, request.deviceId) }))
+
+    authed.delete('/api/devices/:deviceId', async (request, reply) => {
+      const { deviceId } = request.params as { deviceId: string }
+      sync.revokeDevice(request.player.steamId, deviceId === 'current' ? request.deviceId : deviceId)
+      return reply.status(204).send()
+    })
+
+    authed.patch('/api/me', async request => ({ player: sync.setNick(request.player.steamId, stringField(request.body, 'nick', 64)) }))
 
     authed.put('/api/me/avatar', { bodyLimit: MAX_AVATAR_BYTES }, async (request, reply) => {
       const body = request.body

@@ -92,8 +92,8 @@ Errors are `{ error: "<code>", message }` with a fitting status.
 
 ### Details the server settles (as built in `app/server`)
 
-- Success is `200` with JSON unless the table says `204`. Every route but `POST /api/devices` and `/healthz`
-  needs the bearer token (`401 unauthorized` otherwise).
+- Success is `200` with JSON unless the table says `204`. Every `/api` route but `POST /api/auth/steam/start`
+  and the poll needs the bearer token (`401 unauthorized` otherwise; a revoked device's token is `401` too).
 - A world the caller is not a member of answers `404 world_not_found`, as if it did not exist.
 - **Upload headers**: `X-Sha256` is required and checked against the body (`400 sha256_mismatch`). `X-Parent`
   absent, empty or `null` means no parent. A parent that is not a version of this world is `400 unknown_parent`.
@@ -111,10 +111,16 @@ Errors are `{ error: "<code>", message }` with a fitting status.
   with or without `ENSH-`. Unknown `404 invite_not_found`, spent `410 invite_used`, expired `410 invite_expired`.
   A caller who is already a member gets the world back and the code is not spent. Ten wrong codes in 10 minutes
   from one device are `429 too_many_attempts`.
-- `steamId` is 17 digits; `nick` up to 64 characters, `name` up to 80. Each `POST /api/devices` issues a new
-  token and updates the player's nick. World files up to 64 MB, avatars up to 512 KB (PNG signature checked).
-- Known gap: `POST /api/devices` trusts the `steamId` it is sent (no Steam-side check), so whoever knows a
-  member's steamid64 can get a token as them.
+- `nick` up to 64 characters, `name` up to 80. Each completed Steam login is a new device with its own token and
+  sets the player's nick to the one sent at the start. World files up to 64 MB, avatars up to 512 KB (PNG
+  signature checked).
+- **Steam login**: the callback refuses, with a pt-BR page and no token, an assertion whose `op_endpoint` is not
+  Steam's, whose `return_to` is not exactly this session's callback, whose `claimed_id` is not
+  `https://steamcommunity.com/openid/id/<17 digits>` or differs from `identity`, that does not sign those fields,
+  whose `response_nonce` is more than 10 minutes off or was already used, or that Steam does not confirm.
+  The poll's `410` is `{ error: "claimed" }` after the token was handed out, `{ error: "expired" }` after 10 min;
+  an unknown session is `404 login_not_found`. One address may start 30 logins per 10 minutes (`429`).
+  `DELETE /api/devices/:deviceId` of a device that is not the caller's is `404 device_not_found`.
 
 ## What the app does with the files (not the server's business, but fixed here)
 
