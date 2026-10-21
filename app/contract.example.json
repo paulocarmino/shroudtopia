@@ -1,0 +1,70 @@
+{
+  "createDevice": {
+    "request": { "steamId": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ" },
+    "response": {
+      "token": "dev_01JB7Z8Q2W3E4R5T6Y7U8I9O0P",
+      "player": { "steamId": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ" }
+    }
+  },
+  "createInvite": {
+    "response": { "code": "ENSH-7KQ2", "expiresAt": "2026-10-22T23:40:00.000Z" }
+  },
+  "redeemInvite": {
+    "request": { "code": "ENSH-7KQ2" }
+  },
+  "world": {
+    "worldId": "01JB7Z9A0B1C2D3E4F5G6H7J8K",
+    "name": "Mundo do bang",
+    "members": [
+      { "steamId": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ" },
+      { "steamId": "76561198000000001", "nick": "rodrigao_br" }
+    ],
+    "head": {
+      "versionId": "01JB80AAAAAAAAAAAAAAAAAAAA",
+      "parent": "01JB7ZZZZZZZZZZZZZZZZZZZZZ",
+      "uploadedBy": "76561198000000001",
+      "size": 1797049,
+      "sha256": "9f2c1e0b8a7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3",
+      "startedAt": "2026-10-20T21:48:00.000Z",
+      "endedAt": "2026-10-20T23:40:00.000Z",
+      "createdAt": "2026-10-20T23:40:05.000Z"
+    },
+    "lock": null,
+    "diverged": false,
+    "history": [
+      {
+        "versionId": "01JB80AAAAAAAAAAAAAAAAAAAA",
+        "parent": "01JB7ZZZZZZZZZZZZZZZZZZZZZ",
+        "uploadedBy": "76561198000000001",
+        "size": 1797049,
+        "sha256": "9f2c1e0b8a7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3",
+        "startedAt": "2026-10-20T21:48:00.000Z",
+        "endedAt": "2026-10-20T23:40:00.000Z",
+        "createdAt": "2026-10-20T23:40:05.000Z"
+      }
+    ]
+  },
+  "lockTaken": {
+    "response": {
+      "lock": { "holder": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ", "since": "2026-10-21T21:12:00.000Z", "expiresAt": "2026-10-21T21:17:00.000Z" }
+    }
+  },
+  "lockBusy": {
+    "status": 409,
+    "response": {
+      "lock": { "holder": "76561198000000001", "nick": "rodrigao_br", "since": "2026-10-21T20:47:00.000Z", "expiresAt": "2026-10-21T21:16:00.000Z" }
+    }
+  },
+  "uploadDiverged": {
+    "requestHeaders": { "X-Parent": "01JB7ZZZZZZZZZZZZZZZZZZZZZ", "X-Sha256": "aa11", "X-Started-At": "2026-10-21T19:00:00.000Z", "X-Ended-At": "2026-10-21T20:30:00.000Z" },
+    "response": { "diverged": true, "head": "01JB80AAAAAAAAAAAAAAAAAAAA" }
+  },
+  "presence": {
+    "response": {
+      "players": [
+        { "steamId": "76561198065863968", "nick": "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ", "appOnline": true, "inGame": false },
+        { "steamId": "76561198000000001", "nick": "rodrigao_br", "appOnline": true, "inGame": true }
+      ]
+    }
+  }
+}

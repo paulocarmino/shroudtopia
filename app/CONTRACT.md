@@ -1,0 +1,78 @@
+# Sync contract — desktop app ↔ sync server
+
+Both sides build and test against this file and `contract.example.json`. The example holds one real
+request/response per route; each side's tests read it, so a change here breaks both until both agree.
+
+## Identity
+
+- A **player** is a Steam account: `steamId` (steamid64, string) and `nick` (Steam `PersonaName`).
+  The app reads both from `Steam/config/loginusers.vdf`, the entry with `"MostRecent" "1"`.
+  Optional avatar: `Steam/config/avatarcache/<steamId>.png`, uploaded once as PNG.
+- A **device token** authenticates the app (`Authorization: Bearer <token>`). It is issued by
+  `POST /api/devices` the first time the app talks to the server; no sign-up, no password. The
+  token is stored in the app's config under `%APPDATA%\Shroudtopia`.
+
+## Worlds and versions
+
+- A **world** is one shared Enshrouded world: `worldId` (server-made, ULID), `name`, `members`.
+- A **version** is one upload of the world file: `versionId` (ULID), `parent` (the versionId the
+  uploader's local copy was pulled from, `null` for the first), `uploadedBy` (steamId), `size`,
+  `sha256`, `startedAt`/`endedAt` of the session it closes (or `endedAt: null` for an autosave
+  during a running session), `createdAt`.
+- The server keeps every version (history). `head` is the latest accepted version.
+- **Accepting an upload**: if `parent == head`, the upload becomes the new head. If not, the
+  server stores it as a **branch** (`diverged: true` on the world) and does not move head. The app
+  shows "Vocês jogaram separados" when `diverged` is true or when its own local base ≠ head and the
+  local file changed since that base. `POST /api/worlds/:id/resolve { versionId }` makes the chosen
+  version head and clears `diverged`; the other stays in history.
+- Uploads during a session (autosaves) of the same session chain: each one's `parent` is the
+  previous upload of that session.
+
+## Host lock (lease)
+
+- `POST /api/worlds/:id/lock` takes the lease for the caller, or answers `409` with the holder.
+  The lease lasts 5 minutes and is renewed by `POST /api/worlds/:id/lock/heartbeat` every 60 s
+  while `enshrouded.exe` runs. `DELETE /api/worlds/:id/lock` releases it after the final upload.
+  An expired lease is free; that covers a PC that died mid-session.
+- The lock does not stop the game: the app takes it when the game starts. If someone else holds
+  it, the app shows them as host and does not upload this PC's changes as head (they become a
+  branch if uploaded).
+
+## Pairing
+
+- `POST /api/worlds { name }` creates a world with the caller as member.
+- `POST /api/worlds/:id/invites` → `{ code: "ENSH-7KQ2", expiresAt }`, valid 24 h, one use.
+- `POST /api/invites/redeem { code }` adds the caller to the world and returns it.
+
+## Routes
+
+| Method | Path | Body | Answer |
+|---|---|---|---|
+| POST | `/api/devices` | `{ steamId, nick }` | `{ token, player }` |
+| PUT | `/api/me/avatar` | PNG bytes | `204` |
+| GET | `/api/worlds` | | `{ worlds: World[] }` |
+| POST | `/api/worlds` | `{ name }` | `World` |
+| GET | `/api/worlds/:id` | | `World` with `head`, `lock`, `diverged`, `members`, `history` (last 20 versions) |
+| POST | `/api/worlds/:id/invites` | | `{ code, expiresAt }` |
+| POST | `/api/invites/redeem` | `{ code }` | `World` |
+| POST | `/api/worlds/:id/versions` | raw file bytes; headers `X-Parent`, `X-Sha256`, `X-Started-At`, `X-Ended-At` | `{ version, head, diverged }` |
+| GET | `/api/worlds/:id/versions/:vid/file` | | file bytes |
+| POST | `/api/worlds/:id/lock` | | `{ lock }` or `409 { lock }` |
+| POST | `/api/worlds/:id/lock/heartbeat` | | `{ lock }` |
+| DELETE | `/api/worlds/:id/lock` | | `204` |
+| POST | `/api/worlds/:id/resolve` | `{ versionId }` | `World` |
+| GET | `/api/presence` | | `{ players: [{ steamId, nick, appOnline, inGame }] }` (members of the caller's worlds; `appOnline` = a request in the last 2 min) |
+
+Errors are `{ error: "<code>", message }` with a fitting status.
+
+## What the app does with the files (not the server's business, but fixed here)
+
+- The app maps `worldId → local slot` per PC (`world0.ksd`…`world9.ksd`) in its own config. Only
+  that file is synced. `global.ksd`, `characterN.ksd`, `user_settings.json` and `backup/` are never
+  touched.
+- Upload trigger: watch the slot file; after a write, wait until size and mtime are unchanged for
+  5 s, then upload. Final upload when `enshrouded.exe` exits.
+- Pull: only while the game is closed, write to a temp file in the same folder, then replace.
+  Keep the replaced file as `<slot>.ksd.shroudtopia-<versionId>` in the app's own backup folder.
+- **Steam Cloud**: the save folder is tracked by Steam (`remotecache.vdf`, sha per file). How
+  Steam reacts to a pull is settled by the spike in `PLAN.md`; the app follows its result.
