@@ -67,13 +67,19 @@ pub fn emit_state(app: &AppHandle) {
     let shared = app.state::<Shared>();
     let state = commands::ui_state(&shared);
     let text = serde_json::to_string(&state).unwrap_or_default();
-    let mut last = shared.last_sent.lock().unwrap();
-    if *last != text {
-        *last = text;
-        let _ = app.emit(STATE_EVENT, state);
-        if let (Some(tray), Some(s)) = (app.tray_by_id(TRAY), shared.snapshot.lock().unwrap().as_ref()) {
-            let _ = tray.set_tooltip(Some(shroudtopia_core::view::tray_text(s)));
+    {
+        let mut last = shared.last_sent.lock().unwrap();
+        if *last == text {
+            return;
         }
+        *last = text;
+    }
+    // No lock is held from here on. The tray call waits for the main thread, and the main thread may be waiting for
+    // `snapshot` (get_state): holding it here froze the window, blank or "Não respondendo" (2026-10-21).
+    let tip = shared.snapshot.lock().unwrap().as_ref().map(shroudtopia_core::view::tray_text);
+    let _ = app.emit(STATE_EVENT, state);
+    if let (Some(tray), Some(tip)) = (app.tray_by_id(TRAY), tip) {
+        let _ = tray.set_tooltip(Some(tip));
     }
 }
 
@@ -96,7 +102,9 @@ fn engine_loop(mut engine: Engine, jobs: Receiver<Job>, app: AppHandle) {
             }
             Err(RecvTimeoutError::Timeout) => {
                 last_tick = std::time::Instant::now();
-                engine.tick(chrono::Utc::now(), offset(), shroudtopia_win::process::game_running());
+                let running = shroudtopia_win::process::game_running();
+                engine.rt.just_closed = !running && !shroudtopia_win::process::game_settled();
+                engine.tick(chrono::Utc::now(), offset(), running);
                 engine.publish_now();
             }
             Err(RecvTimeoutError::Disconnected) => return,
@@ -129,14 +137,18 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 pub fn quit(app: &AppHandle) {
-    // the lease is given back if this PC holds it (the game is closed when that matters; otherwise it expires)
-    let _ = app.state::<Shared>().engine(|e| {
-        if !e.rt.game_running {
-            e.forget_lock();
-        }
-        Ok(())
+    // off the caller's thread: from the tray menu that is the main thread, and the engine may be waiting on it
+    let app = app.clone();
+    std::thread::spawn(move || {
+        // the lease is given back if this PC holds it (the game is closed when that matters; otherwise it expires)
+        let _ = app.state::<Shared>().engine(|e| {
+            if !e.rt.game_running {
+                e.forget_lock();
+            }
+            Ok(())
+        });
+        app.exit(0);
     });
-    app.exit(0);
 }
 
 fn make_stores(steam_root: Option<&PathBuf>, user: Option<&steam::SteamUser>, game: Option<PathBuf>, data_dir: &std::path::Path) -> Stores {
@@ -167,8 +179,9 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let steam_user = steam_root.as_ref().and_then(|r| steam::current_user(r));
     let cfg = shroudtopia_core::config::ConfigStore::new(&data_dir).load();
     let game_folder = cfg.game_folder.clone().filter(|g| steam::is_game_folder(g)).or_else(|| steam_root.as_ref().and_then(|r| steam::game_folder(r)));
+    shroudtopia_win::diag::note_start(game_folder.as_deref());
     let stores = make_stores(steam_root.as_ref(), steam_user.as_ref(), game_folder.clone(), &data_dir);
-    let server = std::env::args().skip_while(|a| a != "--server").nth(1).unwrap_or(cfg.server_url.clone());
+    let server =std::env::args().skip_while(|a| a != "--server").nth(1).unwrap_or(cfg.server_url.clone());
     let api = HttpApi::new(&server, &format!("Shroudtopia/{}", shroudtopia_core::APP_VERSION));
     let avatar = match (&steam_root, &steam_user) {
         (Some(r), Some(u)) => Some(steam::avatar_path(r, &u.steam_id)),
@@ -244,10 +257,19 @@ fn wait_for_previous(identifier: &str, limit: Duration) {
 fn wait_for_previous(_identifier: &str, _limit: Duration) {}
 
 pub fn run() {
+    shroudtopia_win::diag::install_panic_log();
     let args: Vec<String> = std::env::args().collect();
     // the Steam remote storage helper (steam_remote.rs): one operation, then exit, no window
     if let Some(at) = args.iter().position(|a| a == steam_remote::FLAG) {
         std::process::exit(steam_remote::helper_main(&args[at + 1..]));
+    }
+    if let Some(exe) = shroudtopia_win::diag::running_from_temp() {
+        shroudtopia_win::diag::note(&format!("refused to start from the temp folder: {}", exe.display()));
+        shroudtopia_win::diag::message(
+            "Shroudtopia",
+            "O Shroudtopia foi aberto de dentro do .zip.\n\nClique com o botão direito no Shroudtopia.zip, escolha \"Extrair tudo\" para uma pasta (por exemplo Documentos) e abra o Shroudtopia.exe de lá.",
+        );
+        return;
     }
     let context = tauri::generate_context!();
     if args.iter().any(|a| a == shroudtopia_core::updater::AFTER_UPDATE) {

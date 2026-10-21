@@ -2,6 +2,7 @@
 //! Linux too (the parts that call Win32 are `cfg(windows)`, with a stand-in elsewhere), so `cargo test` of the
 //! workspace runs in the Linux container.
 
+pub mod diag;
 pub mod places;
 pub mod process;
 pub mod registry;

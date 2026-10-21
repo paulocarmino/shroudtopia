@@ -7,7 +7,7 @@ use shroudtopia_core::format;
 use shroudtopia_core::mods;
 use shroudtopia_core::saves::StoreKind;
 use shroudtopia_core::steam;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -49,9 +49,11 @@ pub fn ui_state(shared: &Shared) -> Value {
     })
 }
 
+// Every command runs off the main thread (async + blocking): the main thread also draws the window and serves the
+// tray, so a command waiting on a lock there could freeze both.
 #[tauri::command]
-pub fn get_state(shared: State<'_, Shared>) -> Value {
-    ui_state(&shared)
+pub async fn get_state(app: AppHandle) -> Value {
+    blocking(move || ui_state(&app.state::<Shared>())).await
 }
 
 fn open(app: &AppHandle, url: &str) -> Result<(), String> {
@@ -133,7 +135,11 @@ struct SlotRow {
 
 /// "Qual mundo?": the worlds of this PC, Steam Cloud's and the local folder's.
 #[tauri::command]
-pub fn list_slots(shared: State<'_, Shared>) -> Value {
+pub async fn list_slots(app: AppHandle) -> Value {
+    blocking(move || slots(&app.state::<Shared>())).await
+}
+
+fn slots(shared: &Shared) -> Value {
     let off = *chrono::Local::now().offset();
     let mut rows = Vec::new();
     for (kind, store) in [(StoreKind::Steam, shared.stores.steam.clone()), (StoreKind::Local, shared.stores.local.clone())] {
@@ -178,33 +184,44 @@ pub async fn redeem(app: AppHandle, code: String, into: StoreKind) -> R {
 }
 
 #[tauri::command]
-pub fn set_mod(app: AppHandle, shared: State<'_, Shared>, mod_key: String, key: String, value: Value) -> R {
+pub async fn set_mod(app: AppHandle, mod_key: String, key: String, value: Value) -> R {
+    blocking(move || set_mod_now(&app, mod_key, key, value)).await
+}
+
+fn set_mod_now(app: &AppHandle, mod_key: String, key: String, value: Value) -> R {
+    let shared = app.state::<Shared>();
     let game = shared.game_folder.lock().unwrap().clone().ok_or("A pasta do Enshrouded não foi achada.")?;
     mods::set(&mods::config_path(&game), &mod_key, &key, value).map_err(|e| match e {
         mods::ModsError::Invalid(e) => format!("O shroudtopia.json não pôde ser lido ({e}); nada foi mudado."),
         mods::ModsError::Io(e) => format!("Não deu para gravar o shroudtopia.json ({e})."),
         mods::ModsError::Missing => "Não deu para gravar o shroudtopia.json.".to_string(),
     })?;
-    crate::emit_state(&app);
+    crate::emit_state(app);
     Ok(Value::Null)
 }
 
 #[tauri::command]
-pub fn update_check(app: AppHandle, shared: State<'_, Shared>) {
-    shared.updates.check();
-    crate::emit_state(&app);
+pub async fn update_check(app: AppHandle) {
+    blocking(move || {
+        app.state::<Shared>().updates.check();
+        crate::emit_state(&app);
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn update_apply(shared: State<'_, Shared>) {
-    shared.updates.apply();
+pub async fn update_apply(app: AppHandle) {
+    blocking(move || app.state::<Shared>().updates.apply()).await
 }
 
 #[tauri::command]
-pub fn set_autostart(app: AppHandle, on: bool) -> R {
-    shroudtopia_win::autostart::set(on).map_err(|e| format!("Não deu para mudar a inicialização com o Windows: {e}"))?;
-    crate::emit_state(&app);
-    Ok(Value::Null)
+pub async fn set_autostart(app: AppHandle, on: bool) -> R {
+    blocking(move || {
+        shroudtopia_win::autostart::set(on).map_err(|e| format!("Não deu para mudar a inicialização com o Windows: {e}"))?;
+        crate::emit_state(&app);
+        Ok(Value::Null)
+    })
+    .await
 }
 
 /// "Trocar": a folder picked by hand, kept only when it has `enshrouded.exe`.

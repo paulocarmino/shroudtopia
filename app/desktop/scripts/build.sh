@@ -29,6 +29,17 @@ case "$(uname -s)" in
         ;;
 esac
 
+# The app's own version lives in four files; the updater compares against the core crate's (APP_VERSION). When they
+# differ the app thinks it is always behind and reinstalls itself in a loop (0.1.1, 2026-10-21): refuse to build.
+v_ws="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$DESKTOP/Cargo.toml")"
+v_tauri="$(sed -n 's/^version = "\(.*\)"/\1/p' "$DESKTOP/src-tauri/Cargo.toml" | head -1)"
+v_conf="$(sed -n 's/^  "version": "\(.*\)",/\1/p' "$DESKTOP/src-tauri/tauri.conf.json" | head -1)"
+v_pkg="$(sed -n 's/^  "version": "\(.*\)",/\1/p' "$DESKTOP/package.json" | head -1)"
+if [ "$v_ws" != "$v_tauri" ] || [ "$v_ws" != "$v_conf" ] || [ "$v_ws" != "$v_pkg" ]; then
+    echo "!! version mismatch: Cargo.toml [workspace] $v_ws, src-tauri/Cargo.toml $v_tauri, tauri.conf.json $v_conf, package.json $v_pkg" >&2
+    exit 1
+fi
+
 TEST=1
 EXE=1
 ICONS=0

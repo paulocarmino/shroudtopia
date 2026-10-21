@@ -69,6 +69,9 @@ pub struct Runtime {
     pub contacted: bool,
     pub presence: Vec<PresencePlayer>,
     pub game_running: bool,
+    /// the game closed less than a minute ago (process::game_settled): no pull into the saves yet, Steam is still
+    /// syncing the game's cloud files
+    pub just_closed: bool,
     pub lock_mine: bool,
     pub transfer: Transfer,
     pub error: Option<String>,
@@ -667,7 +670,7 @@ impl Engine {
             // behind and changed: "Vocês jogaram separados", the player picks
             return;
         }
-        if self.behind() && self.holder() != Holder::Other {
+        if self.behind() && self.holder() != Holder::Other && !self.rt.just_closed {
             let head = self.rt.world.as_ref().and_then(|w| w.head.clone()).unwrap();
             if let Err(e) = self.pull(&head) {
                 self.rt.error = Some(e);
@@ -819,6 +822,9 @@ impl Engine {
     pub fn play(&mut self) -> R<&'static str> {
         if self.rt.game_running {
             return Err("O Enshrouded já está aberto.".into());
+        }
+        if self.rt.just_closed {
+            return Err("O Enshrouded acabou de fechar. Espera um minuto e clica em Jogar de novo.".into());
         }
         if self.cfg.world.is_some() {
             self.fetch();

@@ -3411,7 +3411,7 @@ dependencies = [
 
 [[package]]
 name = "shroudtopia-core"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3425,8 +3425,9 @@ dependencies = [
 
 [[package]]
 name = "shroudtopia-win"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
+ "chrono",
  "shroudtopia-core",
  "windows-sys 0.59.0",
 ]
