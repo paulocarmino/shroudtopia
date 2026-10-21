@@ -9,8 +9,8 @@ const t = (cls: string): Tag => ({ cls, text: { here: "neste PC", cloud: "no ser
 const row = (who: "me" | "friend", when: string, size: string, tags: string[]): HistRow => ({ who, initial: who === "me" ? "L" : "R", name: who === "me" ? "Você" : FR, when, size, tags: tags.map(t) });
 const play = (disabled = false) => ({ label: "Jogar", kind: "play" as const, icon: "play", cls: "primary", disabled });
 
-function world(s: string): WorldView {
-  const base = { name: "Mundo do bang", aside: `com ${FR}`, file: "world2.ksd", store: "steam" as const, members: 2, progress: null, note: null, choices: null, state: s };
+function world(s: string, id = "w1", name = "CopyWithGabe", fr = FR): WorldView {
+  const base = { id, name, with: `com ${fr}`, file: id === "w1" ? "world2.ksd" : "world3.ksd", store: "steam" as const, members: 2, progress: null, note: null, choices: null, state: s };
   switch (s) {
     case "me":
       return { ...base, tone: "live", status: "Você está hospedando", line: "Desde 21:12 · último autosave enviado às 22:31", action: { label: "Enshrouded aberto", kind: "none", icon: null, cls: "", disabled: true }, history: [row("me", "hoje, desde 21:12", "1,8 MB", ["live"]), row("friend", "ontem, 21:48 – 23:40", "1,8 MB", ["cloud"]), row("me", "ontem, 14:02 – 17:15", "1,7 MB", [])] };
@@ -51,7 +51,8 @@ export function mockState(): UiState {
       player: { nick: ME, initial: "L", me: true, sub: "online", dot: "ok" },
       gameRunning: game,
       online: s !== "offline",
-      world: world(s),
+      // `?worlds=1` for the single card; two by default (the second one in sync, with another friend)
+      worlds: q.get("worlds") === "1" ? [world(s)] : [world(s), world(q.get("sync2") ?? "sync", "w2", "Testando1.0", "† THE VOID †")],
       people: [
         { nick: ME, initial: "L", me: true, sub: s === "me" ? "hospedando" : "online", dot: s === "me" ? "live" : "ok" },
         { nick: FR, initial: "R", me: false, sub: fr[0], dot: fr[1] },
@@ -80,7 +81,7 @@ export function mockState(): UiState {
 export function mockSlots(): Slots {
   return {
     slots: [
-      { store: "steam", index: 0, file: "world0.ksd", title: "CopyWithGabe", sub: "1,7 MB · jogado em 17 out, 00:16 · Steam" },
+      { store: "steam", index: 0, file: "world0.ksd", title: "CopyWithGabe", sub: "1,7 MB · jogado em 17 out, 00:16 · Steam", shared: true },
       { store: "steam", index: 1, file: "world1.ksd", title: "Testando1.0", sub: "145 KB · jogado em 20 out, 22:40 · Steam" },
       { store: "local", index: 0, file: "world0.ksd", title: "CopyWithGabe", sub: "1,7 MB · jogado em 17 out, 00:16 · Local" },
     ],

@@ -395,3 +395,7 @@ input, select { font: inherit; }
 .skin-st .card { background: var(--surface); }
 .skin-st .w2-head { gap: 12px; }
 .skin-st .st-medal { width: 48px; height: 48px; flex: none; object-fit: contain; pointer-events: none; user-select: none; }
+.more-worlds { display: flex; gap: 8px; flex-wrap: wrap; }
+.w2-head .with { color: var(--muted); font-size: 12.5px; }
+.slots .row.taken { opacity: .5; cursor: not-allowed; }
+.slots .row.taken:hover { background: transparent; }

@@ -19,6 +19,10 @@
   let codeScreen = $state<string | null>(null);
   /** the first-run flow stays up after a redeem until "Pronto" */
   let holdFirstRun = $state(false);
+  /** "Compartilhar outro mundo" / "Tenho um código" under the cards: the pairing flow at that step */
+  let pairing = $state<"slot" | "paste" | null>(null);
+  /** the world a code from "Convidar amigo" is for */
+  let codeFor = $state<string | null>(null);
 
   onMount(() => {
     const q = new URLSearchParams(location.search);
@@ -45,7 +49,9 @@
 
   const sync = $derived(s?.sync ?? null);
   const phase = $derived(sync?.phase ?? "login");
-  const w = $derived(sync?.world ?? null);
+  const worlds = $derived(sync?.worlds ?? []);
+  // the Mundo nav's "!" when any world needs the player (two versions to choose from)
+  const attention = $derived(worlds.some((x) => x.state === "diverged"));
   const game = $derived(s?.gameRunning ?? false);
   const updBadge = $derived(s?.update.badge ?? false);
   // while pairing, the flow keeps its own steps (the code, the redeemed world) after the phase turns main
@@ -56,22 +62,23 @@
   $effect(() => {
     if (game) notice = null;
   });
-  const firstRun = $derived(phase !== "main" || codeScreen !== null || holdFirstRun);
+  const firstRun = $derived(phase !== "main" || codeScreen !== null || holdFirstRun || pairing !== null);
 
-  function onaction(kind: string) {
-    if (kind === "play") act(() => api.play());
+  function onaction(world: string, kind: string) {
+    if (kind === "play") act(() => api.play(world));
     else if (kind === "join")
       act(async () => {
-        notice = (await api.join())?.note ?? null;
+        notice = (await api.join(world))?.note ?? null;
       });
   }
   function onupdate() {
     if (!s) return;
     act(() => (s!.update.state === "ok" ? api.updateCheck() : api.updateApply()));
   }
-  async function invite() {
+  async function invite(world: string) {
     await act(async () => {
-      codeScreen = (await api.newInvite()).code;
+      codeFor = worlds.find((x) => x.id === world)?.name ?? null;
+      codeScreen = (await api.newInvite(world)).code;
     });
   }
 </script>
@@ -99,7 +106,7 @@
     <div class="split">
       <aside class="rail">
         {@render brand()}
-        <button class="nav" role="tab" aria-selected={tab === "world"} onclick={() => (tab = "world")}>{@html ICON.globe}Mundo{#if w?.state === "diverged"}<span class="badge" style="background:var(--warn)">!</span>{/if}</button>
+        <button class="nav" role="tab" aria-selected={tab === "world"} onclick={() => (tab = "world")}>{@html ICON.globe}Mundo{#if attention}<span class="badge" style="background:var(--warn)">!</span>{/if}</button>
         <button class="nav" role="tab" aria-selected={tab === "mods"} onclick={() => (tab = "mods")}>{@html ICON.puzzle}Mods</button>
         <button class="nav" role="tab" aria-selected={tab === "update"} onclick={() => (tab = "update")}>{@html ICON.download}Atualização{#if updBadge}<span class="badge">1</span>{/if}</button>
         {#if sync?.people.length}
@@ -127,19 +134,25 @@
             <FirstRun
               {s}
               embedded
-              start={codeScreen ? "code" : "choose"}
+              start={codeScreen ? "code" : (pairing ?? "choose")}
               invite={codeScreen}
+              inviteFor={codeFor}
               ondone={() => {
                 codeScreen = null;
                 holdFirstRun = false;
+                pairing = null;
               }}
             />
           {:else if tab === "world"}
             <div class="sec">
-              <div class="sec-title"><h2>Mundo compartilhado</h2>{#if w}<span class="aside">{w.aside}</span>{/if}</div>
-              {#if w}
-                <WorldCard {w} {busy} {onaction} onresolve={(keepMine) => act(() => api.resolve(keepMine))} />
-              {/if}
+              <div class="sec-title"><h2>{worlds.length > 1 ? "Mundos compartilhados" : "Mundo compartilhado"}</h2></div>
+              {#each worlds as w (w.id)}
+                <WorldCard {w} {busy} onaction={(kind) => onaction(w.id, kind)} onresolve={(keepMine) => act(() => api.resolve(w.id, keepMine))} />
+              {/each}
+              <div class="more-worlds">
+                <button class="btn" disabled={busy} onclick={() => (pairing = "slot")}>{@html ICON.plus}Compartilhar outro mundo</button>
+                <button class="btn" disabled={busy} onclick={() => (pairing = "paste")}>{@html ICON.link}Tenho um código</button>
+              </div>
               {#if sync?.error}<Note text={sync.error} icon="alert" error />{/if}
             </div>
           {:else if tab === "mods"}
@@ -154,7 +167,7 @@
               {onupdate}
               onfolder={() => act(() => api.chooseGameFolder())}
               onautostart={(on) => act(() => api.setAutostart(on))}
-              onstore={(into) => act(() => api.moveStore(into))}
+              onstore={(world, into) => act(() => api.moveStore(world, into))}
               oninvite={invite}
               onlogout={() => act(() => api.logout())}
             />
