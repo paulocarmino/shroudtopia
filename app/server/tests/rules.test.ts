@@ -12,8 +12,8 @@ let worldId: string
 
 beforeEach(async () => {
   h = await harness()
-  tokenA = await device(h.app, A, 'laranjo')
-  tokenB = await device(h.app, B, 'rodrigao_br')
+  tokenA = await device(h, A, 'laranjo')
+  tokenB = await device(h, B, 'rodrigao_br')
   const res = await h.app.inject({ method: 'POST', url: '/api/worlds', headers: bearer(tokenA), payload: { name: 'Mundo do bang' } })
   worldId = res.json().worldId
   const code = (await h.app.inject({ method: 'POST', url: `/api/worlds/${worldId}/invites`, headers: bearer(tokenA) })).json().code
@@ -204,8 +204,8 @@ describe('invites', () => {
     expect(invite.code).toMatch(/^ENSH-[2-9A-HJKMNP-Z]{4}$/)
     expect(invite.expiresAt).toBe('2026-10-22T21:00:00.000Z')
 
-    const tokenC = await device(h.app, C, 'terceiro')
-    const tokenD = await device(h.app, '76561198000000003', 'quarto')
+    const tokenC = await device(h, C, 'terceiro')
+    const tokenD = await device(h, '76561198000000003', 'quarto')
     const redeemed = await h.app.inject({ method: 'POST', url: '/api/invites/redeem', headers: bearer(tokenC), payload: { code: invite.code.toLowerCase() } })
     expect(redeemed.statusCode).toBe(200)
     expect(redeemed.json().members.map((m: { steamId: string }) => m.steamId)).toEqual([A, B, C])
@@ -218,7 +218,7 @@ describe('invites', () => {
 
   it('expires after 24 h', async () => {
     const invite = (await h.app.inject({ method: 'POST', url: `/api/worlds/${worldId}/invites`, headers: bearer(tokenA) })).json()
-    const tokenC = await device(h.app, C, 'terceiro')
+    const tokenC = await device(h, C, 'terceiro')
     h.advance(24 * 60 * 60_000)
     const late = await h.app.inject({ method: 'POST', url: '/api/invites/redeem', headers: bearer(tokenC), payload: { code: invite.code } })
     expect(late.statusCode).toBe(410)
@@ -229,12 +229,12 @@ describe('invites', () => {
   it('a member redeeming gets the world and does not spend the code', async () => {
     const invite = (await h.app.inject({ method: 'POST', url: `/api/worlds/${worldId}/invites`, headers: bearer(tokenA) })).json()
     expect((await h.app.inject({ method: 'POST', url: '/api/invites/redeem', headers: bearer(tokenB), payload: { code: invite.code } })).statusCode).toBe(200)
-    const tokenC = await device(h.app, C, 'terceiro')
+    const tokenC = await device(h, C, 'terceiro')
     expect((await h.app.inject({ method: 'POST', url: '/api/invites/redeem', headers: bearer(tokenC), payload: { code: invite.code } })).statusCode).toBe(200)
   })
 
   it('unknown codes are 404 and too many of them are 429', async () => {
-    const tokenC = await device(h.app, C, 'terceiro')
+    const tokenC = await device(h, C, 'terceiro')
     for (let i = 0; i < 10; i++) {
       const res = await h.app.inject({ method: 'POST', url: '/api/invites/redeem', headers: bearer(tokenC), payload: { code: 'ENSH-0000' } })
       expect(res.statusCode).toBe(404)
@@ -249,7 +249,7 @@ describe('access', () => {
     const none = await h.app.inject({ method: 'GET', url: '/api/worlds' })
     expect(none.statusCode).toBe(401)
     expect(none.json()).toMatchObject({ error: 'unauthorized' })
-    const stranger = await device(h.app, '76561198000000009', 'estranho')
+    const stranger = await device(h, '76561198000000009', 'estranho')
     const res = await h.app.inject({ method: 'GET', url: `/api/worlds/${worldId}`, headers: bearer(stranger) })
     expect(res.statusCode).toBe(404)
     expect((await upload(h.app, stranger, worldId, Buffer.from('x'), null)).statusCode).toBe(404)
@@ -264,7 +264,7 @@ describe('access', () => {
     const got = await h.app.inject({ method: 'GET', url: `/api/players/${A}/avatar`, headers: bearer(tokenB) })
     expect(got.statusCode).toBe(200)
     expect(got.rawPayload.equals(png)).toBe(true)
-    const stranger = await device(h.app, '76561198000000009', 'estranho')
+    const stranger = await device(h, '76561198000000009', 'estranho')
     expect((await h.app.inject({ method: 'GET', url: `/api/players/${A}/avatar`, headers: bearer(stranger) })).statusCode).toBe(404)
   })
 })

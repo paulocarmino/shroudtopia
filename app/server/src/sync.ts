@@ -61,6 +61,8 @@ export interface Rules {
   onlineMs: number
   /** how many versions `history` holds */
   historyLength: number
+  /** how long a Steam login session waits for the browser and the poll */
+  loginMs: number
 }
 
 export const DEFAULT_RULES: Rules = {
@@ -68,6 +70,7 @@ export const DEFAULT_RULES: Rules = {
   inviteMs: 24 * 60 * 60_000,
   onlineMs: 2 * 60_000,
   historyLength: 20,
+  loginMs: 10 * 60_000,
 }
 
 const iso = (ms: number) => new Date(ms).toISOString()
@@ -132,6 +135,31 @@ const SCHEMA = [
     expires_at INTEGER NOT NULL
   );
   `,
+  // 2: Steam login. Tokens issued before it were never proven, so they are dropped.
+  `
+  DROP TABLE devices;
+  CREATE TABLE devices (
+    device_id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    steam_id TEXT NOT NULL REFERENCES players(steam_id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    last_seen_at INTEGER NOT NULL
+  );
+  CREATE INDEX devices_by_player ON devices(steam_id);
+  CREATE TABLE login_sessions (
+    session_id TEXT PRIMARY KEY,
+    nick TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    steam_id TEXT,
+    verified_at INTEGER,
+    claimed_at INTEGER
+  );
+  CREATE TABLE openid_nonces (
+    nonce TEXT PRIMARY KEY,
+    used_at INTEGER NOT NULL
+  );
+  `,
 ]
 
 interface VersionRow {
@@ -173,7 +201,7 @@ const toVersion = (row: VersionRow): Version => ({
 export class Sync {
   readonly db: DatabaseSync
   readonly rules: Rules
-  private readonly now: Clock
+  readonly now: Clock
 
   constructor(path: string, options: { clock?: Clock; rules?: Partial<Rules> } = {}) {
     this.db = new DatabaseSync(path)
@@ -211,30 +239,112 @@ export class Sync {
 
   // ---- devices and players
 
-  /** A new token for this Steam account; the nick is updated to the one sent. */
-  createDevice(steamId: string, nick: string): { token: string; player: Player } {
-    const now = this.now()
-    const token = newToken()
-    this.tx(() => {
-      this.db
-        .prepare(
-          `INSERT INTO players (steam_id, nick, created_at, last_seen_at) VALUES (?, ?, ?, ?)
-           ON CONFLICT(steam_id) DO UPDATE SET nick = excluded.nick, last_seen_at = excluded.last_seen_at`,
-        )
-        .run(steamId, nick, now, now)
-      this.db.prepare('INSERT INTO devices (token_hash, steam_id, created_at) VALUES (?, ?, ?)').run(hashToken(token), steamId, now)
-    })
-    return { token, player: { steamId, nick } }
+  /**
+   * A new device token for a Steam account whose steamId was proven (Steam login, or the tests). The nick is updated
+   * to the one sent. Only the token's sha256 is kept.
+   */
+  issueDevice(steamId: string, nick: string): { token: string; deviceId: string; player: Player } {
+    return this.tx(() => this.insertDevice(steamId, nick))
   }
 
-  /** The player a token belongs to, and marks them as seen; null for an unknown token. */
-  authenticate(token: string): Player | null {
+  /** issueDevice without its own transaction, for callers already in one */
+  private insertDevice(steamId: string, nick: string): { token: string; deviceId: string; player: Player } {
+    const now = this.now()
+    const token = newToken()
+    const deviceId = ulid(now)
+    this.db
+      .prepare(
+        `INSERT INTO players (steam_id, nick, created_at, last_seen_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(steam_id) DO UPDATE SET nick = excluded.nick, last_seen_at = excluded.last_seen_at`,
+      )
+      .run(steamId, nick, now, now)
+    this.db
+      .prepare('INSERT INTO devices (device_id, token_hash, steam_id, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)')
+      .run(deviceId, hashToken(token), steamId, now, now)
+    return { token, deviceId, player: { steamId, nick } }
+  }
+
+  /** The player and device a token belongs to, and marks both as seen; null for an unknown (or revoked) token. */
+  authenticate(token: string): { player: Player; deviceId: string } | null {
     const row = this.db
-      .prepare('SELECT p.steam_id, p.nick FROM devices d JOIN players p ON p.steam_id = d.steam_id WHERE d.token_hash = ?')
-      .get(hashToken(token)) as { steam_id: string; nick: string } | undefined
+      .prepare('SELECT d.device_id, p.steam_id, p.nick FROM devices d JOIN players p ON p.steam_id = d.steam_id WHERE d.token_hash = ?')
+      .get(hashToken(token)) as { device_id: string; steam_id: string; nick: string } | undefined
     if (!row) return null
-    this.db.prepare('UPDATE players SET last_seen_at = ? WHERE steam_id = ?').run(this.now(), row.steam_id)
-    return { steamId: row.steam_id, nick: row.nick }
+    const now = this.now()
+    this.db.prepare('UPDATE players SET last_seen_at = ? WHERE steam_id = ?').run(now, row.steam_id)
+    this.db.prepare('UPDATE devices SET last_seen_at = ? WHERE device_id = ?').run(now, row.device_id)
+    return { player: { steamId: row.steam_id, nick: row.nick }, deviceId: row.device_id }
+  }
+
+  devices(steamId: string, currentDeviceId: string): { deviceId: string; createdAt: string; lastSeenAt: string; current: boolean }[] {
+    const rows = this.db
+      .prepare('SELECT device_id, created_at, last_seen_at FROM devices WHERE steam_id = ? ORDER BY created_at, device_id')
+      .all(steamId) as { device_id: string; created_at: number; last_seen_at: number }[]
+    return rows.map(row => ({ deviceId: row.device_id, createdAt: iso(row.created_at), lastSeenAt: iso(row.last_seen_at), current: row.device_id === currentDeviceId }))
+  }
+
+  /** Revokes one of the player's own devices; another player's device is as unknown as a made-up id. */
+  revokeDevice(steamId: string, deviceId: string): void {
+    const removed = this.db.prepare('DELETE FROM devices WHERE device_id = ? AND steam_id = ?').run(deviceId, steamId)
+    if (removed.changes === 0) throw new SyncError(404, 'device_not_found', 'no such device')
+  }
+
+  setNick(steamId: string, nick: string): Player {
+    this.db.prepare('UPDATE players SET nick = ? WHERE steam_id = ?').run(nick, steamId)
+    return { steamId, nick }
+  }
+
+  // ---- Steam login sessions (steam.ts checks what Steam says; this keeps the state)
+
+  startLogin(nick: string): { sessionId: string; expiresAt: number } {
+    const now = this.now()
+    // what expired long ago is of no use to anyone
+    this.db.prepare('DELETE FROM login_sessions WHERE expires_at <= ?').run(now - 60 * 60_000)
+    this.db.prepare('DELETE FROM openid_nonces WHERE used_at <= ?').run(now - 24 * 60 * 60_000)
+    const sessionId = ulid(now)
+    const expiresAt = now + this.rules.loginMs
+    this.db.prepare('INSERT INTO login_sessions (session_id, nick, created_at, expires_at) VALUES (?, ?, ?, ?)').run(sessionId, nick, now, expiresAt)
+    return { sessionId, expiresAt }
+  }
+
+  /** True when the session exists, has not expired and Steam has not vouched for it yet. */
+  pendingLogin(sessionId: string): boolean {
+    const row = this.db.prepare('SELECT expires_at, verified_at FROM login_sessions WHERE session_id = ?').get(sessionId) as
+      | { expires_at: number; verified_at: number | null }
+      | undefined
+    return !!row && row.verified_at === null && row.expires_at > this.now()
+  }
+
+  /**
+   * Records the steamId Steam vouched for. A nonce is used once across all sessions and a session is completed
+   * once, so a replayed assertion fails here even if Steam would still call it valid.
+   */
+  completeLogin(sessionId: string, steamId: string, nonce: string): void {
+    const now = this.now()
+    this.tx(() => {
+      if (!this.pendingLogin(sessionId)) throw new SyncError(410, 'expired', 'this login is expired or already done')
+      const seen = this.db.prepare('SELECT 1 AS x FROM openid_nonces WHERE nonce = ?').get(nonce)
+      if (seen) throw new SyncError(400, 'replayed', 'this Steam answer was already used')
+      this.db.prepare('INSERT INTO openid_nonces (nonce, used_at) VALUES (?, ?)').run(nonce, now)
+      this.db.prepare('UPDATE login_sessions SET steam_id = ?, verified_at = ? WHERE session_id = ?').run(steamId, now, sessionId)
+    })
+  }
+
+  /** pending, or the token exactly once; picked up already or expired: 410. The device is made at pick-up. */
+  pollLogin(sessionId: string): { status: 'pending' } | { token: string; player: Player } {
+    const now = this.now()
+    return this.tx(() => {
+      const row = this.db.prepare('SELECT nick, expires_at, steam_id, verified_at, claimed_at FROM login_sessions WHERE session_id = ?').get(sessionId) as
+        | { nick: string; expires_at: number; steam_id: string | null; verified_at: number | null; claimed_at: number | null }
+        | undefined
+      if (!row) throw new SyncError(404, 'login_not_found', 'no such login session')
+      if (row.claimed_at !== null) throw new SyncError(410, 'claimed', 'this login was already picked up')
+      if (row.expires_at <= now) throw new SyncError(410, 'expired', 'this login has expired, start again')
+      if (row.verified_at === null || row.steam_id === null) return { status: 'pending' as const }
+      this.db.prepare('UPDATE login_sessions SET claimed_at = ? WHERE session_id = ?').run(now, sessionId)
+      const { token, player } = this.insertDevice(row.steam_id, row.nick)
+      return { token, player }
+    })
   }
 
   setAvatar(steamId: string, present: boolean): void {

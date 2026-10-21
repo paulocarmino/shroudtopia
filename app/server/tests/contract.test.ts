@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { bearer, harness, sha256, type Harness } from './helpers.ts'
+import { bearer, callbackUrl, harness, ORIGIN, sha256, steamLogin, type Harness } from './helpers.ts'
 
 const example = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../contract.example.json'), 'utf8'))
 
@@ -63,16 +63,39 @@ afterAll(async () => {
 })
 
 describe('contract.example.json', () => {
-  it('createDevice', async () => {
-    const res = await h.app.inject({ method: 'POST', url: '/api/devices', payload: example.createDevice.request })
-    expect(res.statusCode).toBe(200)
-    expect(shapeDiff(example.createDevice.response, res.json())).toEqual([])
-    // the nick, full-width characters and all, comes back as it was sent
-    expect(res.json().player).toEqual(example.createDevice.request)
-    expect(res.json().token).toMatch(/^dev_/)
-    tokenA = res.json().token
+  it('steamLoginStart, steamLoginPending, steamLoginDone', async () => {
+    const start = await h.app.inject({ method: 'POST', url: '/api/auth/steam/start', payload: example.steamLoginStart.request })
+    expect(start.statusCode).toBe(200)
+    expect(shapeDiff(example.steamLoginStart.response, start.json())).toEqual([])
+    const { sessionId, loginUrl, expiresAt } = start.json()
+    expect(loginUrl).toBe(`${ORIGIN}/auth/steam/redirect/${sessionId}`)
+    expect(expiresAt).toBe('2026-10-21T21:10:00.000Z')
+
+    const pending = await h.app.inject({ method: 'GET', url: `/api/auth/steam/poll/${sessionId}` })
+    expect(pending.statusCode).toBe(example.steamLoginPending.status)
+    expect(pending.json()).toEqual(example.steamLoginPending.response)
+
+    const steamId = example.steamLoginDone.response.player.steamId
+    const query = h.steam.assert(steamId, `${ORIGIN}/auth/steam/callback/${sessionId}`, h.clock.now)
+    expect((await h.app.inject({ method: 'GET', url: callbackUrl(sessionId, query) })).statusCode).toBe(200)
+
+    const done = await h.app.inject({ method: 'GET', url: `/api/auth/steam/poll/${sessionId}` })
+    expect(done.statusCode).toBe(200)
+    expect(shapeDiff(example.steamLoginDone.response, done.json())).toEqual([])
+    // the nick, full-width characters and all, is the one the app sent at the start
+    expect(done.json().player).toEqual(example.steamLoginDone.response.player)
+    expect(done.json().token).toMatch(/^dev_/)
+    tokenA = done.json().token
     const other = example.world.members[1]
-    tokenB = (await h.app.inject({ method: 'POST', url: '/api/devices', payload: other })).json().token
+    tokenB = await steamLogin(h, other.steamId, other.nick)
+  })
+
+  it('devices', async () => {
+    const res = await h.app.inject({ method: 'GET', url: '/api/devices', headers: bearer(tokenA) })
+    expect(res.statusCode).toBe(200)
+    expect(shapeDiff(example.devices.response, res.json())).toEqual([])
+    expect(res.json().devices).toHaveLength(1)
+    expect(res.json().devices[0].current).toBe(true)
   })
 
   it('world (POST /api/worlds, GET /api/worlds/:id, GET /api/worlds)', async () => {
@@ -142,7 +165,7 @@ describe('contract.example.json', () => {
     const taken = await h.app.inject({ method: 'POST', url: `/api/worlds/${worldId}/lock`, headers: bearer(tokenA) })
     expect(taken.statusCode).toBe(200)
     expect(shapeDiff(example.lockTaken.response, taken.json())).toEqual([])
-    expect(taken.json().lock).toMatchObject({ holder: example.createDevice.request.steamId, nick: example.createDevice.request.nick })
+    expect(taken.json().lock).toMatchObject({ holder: example.steamLoginDone.response.player.steamId, nick: example.steamLoginDone.response.player.nick })
     const busy = await h.app.inject({ method: 'POST', url: `/api/worlds/${worldId}/lock`, headers: bearer(tokenB) })
     expect(busy.statusCode).toBe(example.lockBusy.status)
     expect(shapeDiff(example.lockBusy.response, busy.json())).toEqual([])
@@ -170,8 +193,8 @@ describe('contract.example.json', () => {
     for (const res of [
       await h.app.inject({ method: 'GET', url: '/api/worlds' }),
       await h.app.inject({ method: 'GET', url: '/api/nope', headers: bearer(tokenA) }),
-      await h.app.inject({ method: 'POST', url: '/api/devices', payload: { steamId: 'x' } }),
-      await h.app.inject({ method: 'POST', url: '/api/devices', headers: { 'content-type': 'application/json' }, payload: '{bad' }),
+      await h.app.inject({ method: 'POST', url: '/api/auth/steam/start', payload: {} }),
+      await h.app.inject({ method: 'POST', url: '/api/auth/steam/start', headers: { 'content-type': 'application/json' }, payload: '{bad' }),
     ]) {
       expect(res.statusCode).toBeGreaterThanOrEqual(400)
       expect(shapeDiff({ error: 'code', message: 'text' }, res.json())).toEqual([])
