@@ -24,7 +24,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP="$(cd "$HERE/.." && pwd)"
 KEY="${SHROUDTOPIA_RELEASE_KEY:-$HOME/.shroudtopia/release-signing.key}"
 PUB="$DESKTOP/release-signing.pub"
-PY="$(command -v python3 || command -v python || true)"
+# the first python that runs (on Windows `python3` may be the Microsoft Store stub)
+PY=""
+for candidate in python3 python py; do
+    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import zipfile" >/dev/null 2>&1; then PY="$candidate"; break; fi
+done
 
 stop() { echo "!! $*" >&2; exit 1; }
 pub_of() { openssl pkey -in "$1" -pubout -outform DER | tail -c 32 | base64 | tr -d '\n'; }

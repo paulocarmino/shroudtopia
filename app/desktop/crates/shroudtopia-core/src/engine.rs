@@ -482,8 +482,9 @@ impl Engine {
         }
         self.check_nick();
         if self.cfg.world.is_none() {
-            if self.cfg.token.is_some() && Self::due(self.rt.last_presence, now, FETCH_PRESENCE) {
+            if Self::due(self.rt.last_presence, now, FETCH_PRESENCE) {
                 self.fetch_presence();
+                self.send_avatar();
             }
             return;
         }
@@ -589,7 +590,9 @@ impl Engine {
                     Err(_) => {}
                 }
             }
-        } else if self.rt.online && self.holder() == Holder::None {
+        } else if self.rt.online && self.holder() != Holder::Other {
+            // free, or the server still names this PC (the app restarted with the game open): the lock POST of the
+            // holder renews it
             self.try_lock();
         }
         // a session that waited in the queue goes first, so this session's uploads chain from it

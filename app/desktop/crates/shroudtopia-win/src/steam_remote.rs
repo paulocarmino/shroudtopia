@@ -7,8 +7,10 @@
 //! seconds, and its process ending guarantees the API is gone. Never while `enshrouded.exe` runs, and only while
 //! Steam itself runs.
 //!
-//!     Shroudtopia.exe --steam-remote write  <game folder> <world2.ksd> <file with the bytes>
-//!     Shroudtopia.exe --steam-remote delete <game folder> <world2.ksd>
+//! ```text
+//! Shroudtopia.exe --steam-remote write  <game folder> <world2.ksd> <file with the bytes>
+//! Shroudtopia.exe --steam-remote delete <game folder> <world2.ksd>
+//! ```
 //!
 //! Exit code 0 is done; anything else failed (the reason on stderr, for the log).
 

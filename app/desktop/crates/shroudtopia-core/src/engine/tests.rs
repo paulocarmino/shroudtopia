@@ -409,3 +409,30 @@ fn moving_the_world_between_stores_copies_it() {
     assert_eq!(fs::read(a.join("world0.ksd")).unwrap(), b"cloud world", "the old file stays");
     assert!(!e.local_changed());
 }
+
+#[test]
+fn an_app_restarted_with_the_game_open_keeps_hosting() {
+    let mut w = World2::new();
+    w.at(60);
+    w.tick(true, false);
+    assert!(w.me.e.rt.lock_mine);
+    // the app restarts (a crash, an update): a new engine on the same data folder, the game still open
+    let stores = Stores { local: Some(Arc::new(LocalStore::new(w.me.saves.clone()))), steam: None };
+    let mut again = Engine::new(Box::new(w.server.client()), w.me.data.clone(), stores, None);
+    again.set_player(Player { steam_id: "76561198065863968".into(), nick: "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ".into() });
+    w.at(30);
+    w.server.set_now(w.now);
+    again.tick(w.now, br(), true);
+    assert!(again.rt.lock_mine, "the lease that names this PC is taken back");
+    assert_eq!(again.state(), SyncState::Me);
+    let started = again.cfg.world.as_ref().unwrap().session.as_ref().unwrap().started_at;
+    assert_eq!(started, w.now - Duration::seconds(30), "the session goes on from when the game started");
+    // and its autosaves go up
+    w.me.write(0, b"after the restart");
+    w.at(1);
+    again.tick(w.now, br(), true);
+    w.at(6);
+    again.tick(w.now, br(), true);
+    let id = again.cfg.world.as_ref().unwrap().world_id.clone();
+    assert_eq!(w.server.file(&id, &w.server.world(&id).head.unwrap().version_id), b"after the restart");
+}

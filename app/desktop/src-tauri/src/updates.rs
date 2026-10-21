@@ -31,6 +31,8 @@ struct Inner {
     /// the files of the offer, downloaded and checked
     mods_zip: Option<PathBuf>,
     exe_ready: bool,
+    /// the last check found no release on GitHub at all
+    none_published: bool,
 }
 
 pub struct Updates {
@@ -51,7 +53,7 @@ impl Updates {
 
     pub fn view(&self, game_running: bool) -> UpdateView {
         let i = self.inner.lock().unwrap();
-        updater::view(&i.phase, i.saved.mods_version.as_deref(), i.saved.last_check, i.error.as_deref(), game_running, Utc::now(), *chrono::Local::now().offset())
+        updater::view(&i.phase, i.saved.mods_version.as_deref(), i.saved.last_check, i.error.as_deref(), i.none_published, game_running, Utc::now(), *chrono::Local::now().offset())
     }
 
     pub fn check(&self) {
@@ -98,10 +100,12 @@ fn step(app: &AppHandle) {
         match r {
             Ok(Some(offer)) if wanted(&offer, i.saved.mods_version.as_deref()) => {
                 i.error = None;
+                i.none_published = false;
                 i.phase = Phase::Available(Box::new(offer));
             }
-            Ok(_) => {
+            Ok(found) => {
                 i.error = None;
+                i.none_published = found.is_none();
                 i.phase = Phase::Idle;
             }
             Err(e) => {

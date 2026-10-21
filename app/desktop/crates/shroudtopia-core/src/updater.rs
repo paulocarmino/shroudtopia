@@ -266,7 +266,7 @@ pub struct UpdateView {
 }
 
 /// The update card, in the prototype's words.
-pub fn view(phase: &Phase, installed: Option<&str>, checked: Option<DateTime<Utc>>, error: Option<&str>, game_running: bool, now: DateTime<Utc>, off: FixedOffset) -> UpdateView {
+pub fn view(phase: &Phase, installed: Option<&str>, checked: Option<DateTime<Utc>>, error: Option<&str>, none_published: bool, game_running: bool, now: DateTime<Utc>, off: FixedOffset) -> UpdateView {
     let act = |label: &str, cls: &str, disabled: bool| Some(crate::view::Action { label: label.into(), kind: "update".into(), icon: None, cls: cls.into(), disabled });
     let app_version = crate::APP_VERSION.to_string();
     let mods = installed.map(|v| format!("Mods v{v}")).unwrap_or_else(|| "Mods".into());
@@ -321,6 +321,7 @@ pub fn view(phase: &Phase, installed: Option<&str>, checked: Option<DateTime<Utc
             sub: match (phase, error, checked) {
                 (Phase::Checking, _, _) => "Verificando…".into(),
                 (_, Some(e), _) => format!("Não deu para verificar: {e}"),
+                (_, None, Some(t)) if none_published => format!("Nenhuma versão publicada ainda · verificado {}", format::day_time(t, now, off)),
                 (_, None, Some(t)) => format!("Tudo atualizado · verificado {}", format::day_time(t, now, off)),
                 (_, None, None) => "Ainda não verificado".into(),
             },
@@ -444,15 +445,15 @@ mod tests {
         let off = FixedOffset::east_opt(0).unwrap();
         let mods = zip_of(&[("shroudtopia.dll", b"x")]);
         let o = Box::new(offer(&gh("0.4.3", "- a"), &manifest_json("0.4.3", b"e", &mods), &test_key()).unwrap());
-        let v = view(&Phase::Available(o.clone()), Some("0.4.2"), None, None, false, now, off);
+        let v = view(&Phase::Available(o.clone()), Some("0.4.2"), None, None, false, false, now, off);
         assert_eq!((v.state.as_str(), v.name.as_str()), ("avail", "Versão 0.4.3 disponível"));
         assert!(v.sub.starts_with("Você está na 0.4.2 · "));
-        let v = view(&Phase::Ready(o.clone()), Some("0.4.2"), None, None, true, now, off);
+        let v = view(&Phase::Ready(o.clone()), Some("0.4.2"), None, None, false, true, now, off);
         assert_eq!((v.state.as_str(), v.name.as_str(), v.sub.as_str()), ("blocked", "Versão 0.4.3 pronta", "Feche o Enshrouded para instalar. Instala sozinho quando fechar."));
         assert!(v.action.unwrap().disabled);
-        let v = view(&Phase::Installing(o, 70), Some("0.4.2"), None, None, false, now, off);
+        let v = view(&Phase::Installing(o, 70), Some("0.4.2"), None, None, false, false, now, off);
         assert_eq!((v.name.as_str(), v.progress.unwrap().text.as_str()), ("Instalando 0.4.3", "Copiando os mods para a pasta do jogo"));
-        let v = view(&Phase::Idle, Some("0.4.2"), Some(now), None, false, now, off);
+        let v = view(&Phase::Idle, Some("0.4.2"), Some(now), None, false, false, now, off);
         assert_eq!(v.name, "Mods v0.4.2");
         assert!(v.sub.starts_with("Tudo atualizado · verificado hoje, "));
         assert_eq!(v.action.unwrap().label, "Verificar");

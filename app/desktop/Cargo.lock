@@ -864,6 +864,7 @@ name = "shroudtopia-win"
 version = "0.1.0"
 dependencies = [
  "shroudtopia-core",
+ "tempfile",
  "windows-sys 0.59.0",
 ]
 
