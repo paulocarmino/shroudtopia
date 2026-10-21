@@ -143,7 +143,7 @@ pub fn list_slots(shared: State<'_, Shared>) -> Value {
                 store: kind,
                 index: s.index,
                 file: s.file.clone(),
-                title: format!("Mundo {}", s.index + 1),
+                title: s.name.clone().unwrap_or_else(|| format!("Mundo {}", s.index + 1)),
                 sub: format!("{} · jogado em {} · {}", format::size(s.size), format::played_at(s.modified, off), if kind == StoreKind::Steam { "Steam" } else { "Local" }),
             });
         }

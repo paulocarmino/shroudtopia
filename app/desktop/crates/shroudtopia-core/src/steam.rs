@@ -33,6 +33,8 @@ pub struct Slot {
     pub file: String,
     pub size: u64,
     pub modified: DateTime<Utc>,
+    /// the name shown in the game's world list, read from the file (`world_name`)
+    pub name: Option<String>,
 }
 
 pub fn slot_file(index: u8) -> String {
@@ -97,9 +99,37 @@ pub fn list_slots(save_dir: &Path) -> Vec<Slot> {
         .filter_map(|index| {
             let file = slot_file(index);
             let meta = fs::metadata(save_dir.join(&file)).ok().filter(|m| m.is_file())?;
-            Some(Slot { index, file, size: meta.len(), modified: modified(&meta) })
+            let name = read_head(&save_dir.join(&file)).as_deref().and_then(world_name);
+            Some(Slot { index, file, size: meta.len(), modified: modified(&meta), name })
         })
         .collect()
+}
+
+/// Where a world file keeps the name the player gave it: a little-endian u32 byte length at 119, the UTF-8 name at 123,
+/// in the uncompressed header after `SV2C` (seen 2026-10-21 in "CopyWithGabe", "Testando1.0", "RunWithGabe1.0",
+/// Steam and local saves alike).
+const NAME_LEN_AT: usize = 119;
+const NAME_MAX: usize = 64;
+
+fn read_head(path: &Path) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut head = vec![0; NAME_LEN_AT + 4 + NAME_MAX];
+    let n = fs::File::open(path).ok()?.read(&mut head).ok()?;
+    head.truncate(n);
+    Some(head)
+}
+
+/// The world's own name from the start of its `.ksd`, or None when the header is not the one we know.
+pub fn world_name(head: &[u8]) -> Option<String> {
+    if !head.starts_with(b"SV2C") {
+        return None;
+    }
+    let len = u32::from_le_bytes(head.get(NAME_LEN_AT..NAME_LEN_AT + 4)?.try_into().ok()?) as usize;
+    if len == 0 || len > NAME_MAX {
+        return None;
+    }
+    let name = std::str::from_utf8(head.get(NAME_LEN_AT + 4..NAME_LEN_AT + 4 + len)?).ok()?.trim();
+    (!name.is_empty() && !name.chars().any(char::is_control)).then(|| name.to_string())
 }
 
 /// The lowest slot with no world file, and not one of `taken` (slots already mapped to a shared world).
@@ -209,5 +239,28 @@ mod tests {
         assert_eq!(slot_index("world7.ksd"), Some(7));
         assert_eq!(slot_index("world07.ksd"), None);
         assert_eq!(slot_index("global.ksd"), None);
+        // a file that is not a world save has no name; the window falls back to "Mundo N"
+        assert!(slots.iter().all(|s| s.name.is_none()));
+    }
+
+    #[test]
+    fn reads_the_world_name_from_a_real_save() {
+        // the first 160 bytes of two of Paulo's saves, as the game wrote them (tests/fixtures)
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures");
+        let head = fs::read(fixtures.join("world0-head.bin")).unwrap();
+        assert_eq!(world_name(&head).as_deref(), Some("CopyWithGabe"));
+        assert_eq!(world_name(&fs::read(fixtures.join("world1-head.bin")).unwrap()).as_deref(), Some("Testando1.0"));
+        // and through the slot list, from a whole file
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("world3.ksd"), [head.as_slice(), &[0u8; 64]].concat()).unwrap();
+        assert_eq!(list_slots(dir.path())[0].name.as_deref(), Some("CopyWithGabe"));
+        // anything else is no name, never garbage
+        assert_eq!(world_name(&head[..100]), None);
+        let mut bad = head.clone();
+        bad[NAME_LEN_AT] = 200;
+        assert_eq!(world_name(&bad), None);
+        let mut bad = head;
+        bad[0] = b'X';
+        assert_eq!(world_name(&bad), None);
     }
 }

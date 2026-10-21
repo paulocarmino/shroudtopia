@@ -80,9 +80,9 @@ export function mockState(): UiState {
 export function mockSlots(): Slots {
   return {
     slots: [
-      { store: "steam", index: 0, file: "world0.ksd", title: "Mundo 1", sub: "1,7 MB · jogado em 17 out, 00:16 · Steam" },
-      { store: "steam", index: 1, file: "world1.ksd", title: "Mundo 2", sub: "145 KB · jogado em 20 out, 22:40 · Steam" },
-      { store: "local", index: 0, file: "world0.ksd", title: "Mundo 1", sub: "1,7 MB · jogado em 17 out, 00:16 · Local" },
+      { store: "steam", index: 0, file: "world0.ksd", title: "CopyWithGabe", sub: "1,7 MB · jogado em 17 out, 00:16 · Steam" },
+      { store: "steam", index: 1, file: "world1.ksd", title: "Testando1.0", sub: "145 KB · jogado em 20 out, 22:40 · Steam" },
+      { store: "local", index: 0, file: "world0.ksd", title: "CopyWithGabe", sub: "1,7 MB · jogado em 17 out, 00:16 · Local" },
     ],
     freeSteam: "world2.ksd",
     freeLocal: "world1.ksd",

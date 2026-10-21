@@ -14,7 +14,6 @@
   let code = $state<string | null>(invite);
   let slots = $state<Slots | null>(null);
   let pick = $state<SlotRow | null>(null);
-  let name = $state("");
   let into = $state<"steam" | "local">("steam");
   let pasted = $state("");
   let redeemed = $state<{ name: string; sub: string; initial: string } | null>(null);
@@ -43,7 +42,6 @@
       slots = await api.slots();
       pick = slots.slots[0] ?? null;
       into = pick?.store ?? (slots.steam ? "steam" : "local");
-      name = pick ? pick.title : "";
       step = "slot";
     });
   }
@@ -58,7 +56,8 @@
   async function share() {
     if (!pick) return;
     await run(async () => {
-      const inv = await api.share(pick!.store, pick!.index, into, name);
+      // the shared world keeps the name the game shows for it
+      const inv = await api.share(pick!.store, pick!.index, into, pick!.title);
       code = inv.code;
       step = "code";
     });
@@ -114,7 +113,7 @@
     {#if slots && slots.slots.length}
       <div class="card slots">
         {#each slots.slots as r}
-          <div class="row" role="radio" aria-checked={pick === r} tabindex="0" onclick={() => { pick = r; into = r.store; name = name || r.title; }} onkeydown={(e) => e.key === "Enter" && (pick = r)}>
+          <div class="row" role="radio" aria-checked={pick === r} tabindex="0" onclick={() => { pick = r; into = r.store; }} onkeydown={(e) => e.key === "Enter" && (pick = r)}>
             <span class="radio" class:on={pick === r}></span>
             <div class="txt"><div class="name">{r.title} <span style="color:var(--muted);font-weight:400">· {r.file}</span></div><div class="sub">{r.sub}</div></div>
           </div>
@@ -123,7 +122,6 @@
     {:else}
       <Note text="Nenhum mundo achado neste PC. Crie um no jogo e volte aqui." icon="alert" />
     {/if}
-    <div class="field" style="height:40px"><input bind:value={name} aria-label="Nome do mundo" placeholder="Nome do mundo" style="font:500 14px/1 var(--font);letter-spacing:0" /></div>
     <div class="row" style="padding:0">
       <div class="txt"><div class="sub">Onde o mundo compartilhado fica neste PC</div></div>
       <div class="seg small">
@@ -131,7 +129,7 @@
         <button aria-pressed={into === "local"} disabled={!slots?.local} onclick={() => (into = "local")}>Local</button>
       </div>
     </div>
-    <div class="fr-actions"><button class="btn" onclick={() => (step = "choose")}>Voltar</button><button class="btn primary" disabled={busy || !pick || !name.trim()} onclick={share}>Compartilhar</button></div>
+    <div class="fr-actions"><button class="btn" onclick={() => (step = "choose")}>Voltar</button><button class="btn primary" disabled={busy || !pick} onclick={share}>Compartilhar</button></div>
   {:else if step === "code"}
     <div class="steps">{#each [0, 1, 2] as i}<i class:on={i <= stepIdx}></i>{/each}</div>
     <h2>Mande este código para seu amigo</h2>
