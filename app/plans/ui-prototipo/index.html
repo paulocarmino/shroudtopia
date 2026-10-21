@@ -344,7 +344,7 @@ const SWITCHES = [
   { key: 'layout', label: 'Layout', opts: [['single', 'A · Página única'], ['tabs', 'B · Abas'], ['side', 'C · Barra lateral']], when: s => s.screen === 'main' },
   { key: 'tab', label: 'Aba aberta', opts: [['world', 'Mundo'], ['mods', 'Mods'], ['update', 'Atualização']], when: s => s.screen === 'main' && s.layout !== 'single' },
   { key: 'world', label: 'Card do mundo', opts: [['status', '1 · Status grande'], ['history', '2 · Histórico'], ['pcs', '3 · Dois PCs'], ['row', '4 · Linha compacta']], when: s => s.screen === 'main' },
-  { key: 'sync', label: 'Estado do sync', opts: [['sync', 'Em dia'], ['me', 'Você hospedando'], ['friend', 'Bro hospedando'], ['behind', 'Baixando do Bro'], ['up', 'Enviando'], ['diverged', 'Divergiu'], ['offline', 'Sem servidor']], when: s => s.screen === 'main' },
+  { key: 'sync', label: 'Estado do sync', opts: [['sync', 'Em dia'], ['me', 'Você hospedando'], ['friend', 'Amigo hospedando'], ['behind', 'Baixando do amigo'], ['up', 'Enviando'], ['diverged', 'Divergiu'], ['offline', 'Sem servidor']], when: s => s.screen === 'main' },
   { key: 'mods', label: 'Lista de mods', opts: [['expand', 'Expande por mod'], ['flat', 'Tudo aberto']], when: s => s.screen === 'main' },
   { key: 'upd', label: 'Atualização', opts: [['ok', 'Em dia'], ['avail', 'Disponível'], ['blocked', 'Jogo aberto'], ['installing', 'Instalando']], when: s => s.screen === 'main' },
   { key: 'step', label: 'Passo', opts: [['choose', 'Escolher'], ['slot', 'Qual mundo'], ['code', 'Código criado'], ['paste', 'Colar código']], when: s => s.screen === 'first' },
@@ -357,7 +357,9 @@ const save = () => { try { localStorage.setItem('shroud-proto', JSON.stringify(S
 
 /* ---------- data (world numbers read from this PC on 2026-10-21) ---------- */
 const WORLD = { name: 'Mundo do bang', file: 'world0.ksd', size: '1,8 MB' };
-const ME = 'Paulo', FR = 'Bro';
+// Both names come from each player's Steam nick (Steam/config/loginusers.vdf, PersonaName); ME is the real one on this PC, FR is an example.
+const ME = '[ツ] ＬＡＲＡＮＪＯ', FR = 'rodrigao_br';
+const MEI = 'L', FRI = FR[0].toUpperCase();
 
 const SYNC = {
   sync:     { tone: 'ok', status: 'Em dia', line: `${FR} jogou por último · ontem, 23:40 · 1h52 de sessão`, action: { label: 'Jogar', icon: 'play', cls: 'primary' }, game: false },
@@ -398,8 +400,8 @@ const tg = (on, sm) => `<button class="tg${sm ? ' sm' : ''}" role="switch" aria-
 
 function choices() {
   return `<div class="choices">
-    <button class="choice"><span class="avatar me">P</span><span><div class="t">Seguir com a sua</div><div class="s">hoje, 19:00 – 20:30 · neste PC</div></span>${ICON.chev.replace('<svg', '<svg style="width:14px;transform:rotate(-90deg);color:var(--muted)"')}</button>
-    <button class="choice"><span class="avatar friend">B</span><span><div class="t">Seguir com a do ${FR}</div><div class="s">hoje, 18:40 – 20:10 · no servidor</div></span>${ICON.chev.replace('<svg', '<svg style="width:14px;transform:rotate(-90deg);color:var(--muted)"')}</button>
+    <button class="choice"><span class="avatar me">${MEI}</span><span><div class="t">Seguir com a sua</div><div class="s">hoje, 19:00 – 20:30 · neste PC</div></span>${ICON.chev.replace('<svg', '<svg style="width:14px;transform:rotate(-90deg);color:var(--muted)"')}</button>
+    <button class="choice"><span class="avatar friend">${FRI}</span><span><div class="t">Seguir com a do ${FR}</div><div class="s">hoje, 18:40 – 20:10 · no servidor</div></span>${ICON.chev.replace('<svg', '<svg style="width:14px;transform:rotate(-90deg);color:var(--muted)"')}</button>
   </div>${note('A que ficar de fora não é apagada: vai para o histórico do mundo.')}`;
 }
 
@@ -497,7 +499,7 @@ function updCard(full) {
     blocked:    { cls: 'avail', icon: 'download', name: 'Versão 0.4.3 pronta', sub: 'Feche o Enshrouded para instalar. Instala sozinho quando fechar.', act: { label: 'Atualizar', cls: 'primary', disabled: true } },
     installing: { cls: '', icon: 'download', name: 'Instalando 0.4.3', sub: '', prog: [70, 'Copiando os mods para a pasta do jogo'] },
   }[S.upd];
-  const changes = full && S.upd !== 'ok' ? `<ul class="changelog"><li>Voo: volta a funcionar depois do pulo em água</li><li>Básicos: opção de esconder a barra de stamina</li><li>App: aviso quando o ${FR} começa a hospedar</li></ul>` : '';
+  const changes = full && S.upd !== 'ok' ? `<ul class="changelog"><li>Voo: volta a funcionar depois do pulo em água</li><li>Básicos: opção de esconder a barra de stamina</li><li>App: aviso quando seu amigo começa a hospedar</li></ul>` : '';
   return `<div class="card upd-wrap ${u.cls}" style="${u.cls ? 'border-color:var(--brand)' : ''}"><div class="upd ${u.cls}" style="border-radius:var(--radius)">
     <span class="upd-ico">${ICON[u.icon]}</span>
     <div class="txt"><div class="name">${u.name}</div>${u.sub ? `<div class="sub">${u.sub}</div>` : ''}${prog(u.prog)}</div>
@@ -543,8 +545,8 @@ function layoutTabs() {
 function presence() {
   const fr = S.sync === 'friend' ? ['friend', 'jogando Enshrouded'] : S.sync === 'offline' ? ['', 'sem informação'] : ['ok', 'app aberto'];
   return `<div class="sec"><div class="sec-title"><h2>Quem está no mundo</h2></div><div class="card">
-    <div class="row"><span class="avatar me">P</span><div class="txt"><div class="name">${ME} <span style="color:var(--muted);font-weight:400">· você</span></div></div>${st(S.sync === 'me' ? 'live' : 'ok', S.sync === 'me' ? 'jogando Enshrouded' : 'app aberto')}</div>
-    <div class="row"><span class="avatar friend">B</span><div class="txt"><div class="name">${FR}</div></div>${st(fr[0] || 'muted', fr[1])}</div>
+    <div class="row"><span class="avatar me">${MEI}</span><div class="txt"><div class="name">${ME} <span style="color:var(--muted);font-weight:400">· você</span></div></div>${st(S.sync === 'me' ? 'live' : 'ok', S.sync === 'me' ? 'jogando Enshrouded' : 'app aberto')}</div>
+    <div class="row"><span class="avatar friend">${FRI}</span><div class="txt"><div class="name">${FR}</div></div>${st(fr[0] || 'muted', fr[1])}</div>
   </div></div>`;
 }
 
@@ -556,8 +558,8 @@ function layoutSide() {
     <aside class="rail">${brand}
       ${n('world', 'globe', 'Mundo', worldBadge())}${n('mods', 'puzzle', 'Mods')}${n('update', 'download', 'Atualização', updBadge())}
       <div class="rail-foot"><span class="k">No mundo</span>
-        <div class="person"><span class="avatar me">P</span><span>${ME}</span><span class="spacer"></span><span class="dot ${S.sync === 'me' ? 'live' : 'ok'}"></span></div>
-        <div class="person"><span class="avatar friend">B</span><span>${FR}</span><span class="spacer"></span><span class="muted">${fr[1]}</span><span class="dot ${fr[0]}"></span></div>
+        <div class="person"><span class="avatar me">${MEI}</span><span>${ME}</span><span class="spacer"></span><span class="dot ${S.sync === 'me' ? 'live' : 'ok'}"></span></div>
+        <div class="person"><span class="avatar friend">${FRI}</span><span>${FR}</span><span class="spacer"></span><span class="muted">${fr[1]}</span><span class="dot ${fr[0]}"></span></div>
       </div>
     </aside>
     <div style="display:flex;flex-direction:column;min-height:0">
@@ -584,13 +586,13 @@ function firstRun() {
     </div>
     <div class="field" style="height:40px"><input id="wname" value="${WORLD.name}" aria-label="Nome do mundo" style="font:500 14px/1 var(--font);letter-spacing:0"></div>
     <div class="fr-actions"><button class="btn">Voltar</button><button class="btn primary">Compartilhar</button></div>`;
-  if (S.step === 'code') inner = `${steps}<h2>Mande este código para o ${FR}</h2><p class="lead">Ele cola no app dele e o ${WORLD.name} aparece lá. Vale por 24 horas e para uma pessoa.</p>
+  if (S.step === 'code') inner = `${steps}<h2>Mande este código para seu amigo</h2><p class="lead">Ele cola no app dele e o ${WORLD.name} aparece lá. Vale por 24 horas e para uma pessoa.</p>
     <div class="card code"><span class="val">ENSH-7KQ2</span><button class="btn">${ICON.copy}Copiar</button></div>
     <div class="card"><div class="row"><span class="avatar friend">?</span><div class="txt"><div class="name">Esperando o amigo</div><div class="sub">Aparece aqui quando ele usar o código</div></div>${st('busy', 'aguardando')}</div></div>
     <div class="fr-actions"><button class="btn primary">Pronto</button></div>`;
   if (S.step === 'paste') inner = `${steps}<h2>Cole o código</h2><p class="lead">O mundo é baixado para um espaço livre de save neste PC. Nenhum mundo seu é tocado.</p>
     <div class="field">${ICON.link.replace('<svg', '<svg style="width:16px;color:var(--muted)"')}<input id="code" value="ENSH-7KQ2" aria-label="Código"></div>
-    <div class="card"><div class="row"><span class="avatar friend">B</span><div class="txt"><div class="name">${WORLD.name}</div><div class="sub">de ${FR} · 1,8 MB · vai para o espaço world2.ksd</div></div>${st('ok', 'código válido')}</div></div>
+    <div class="card"><div class="row"><span class="avatar friend">${FRI}</span><div class="txt"><div class="name">${WORLD.name}</div><div class="sub">de ${FR} · 1,8 MB · vai para o espaço world2.ksd</div></div>${st('ok', 'código válido')}</div></div>
     <div class="fr-actions"><button class="btn">Voltar</button><button class="btn primary">${ICON.download}Baixar e entrar</button></div>`;
   return `${titlebar}<div class="app-head">${brand}<span class="spacer"></span><span class="chip"><span class="dot"></span>Enshrouded fechado</span></div><div class="fr">${inner}</div>`;
 }

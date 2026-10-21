@@ -26,6 +26,7 @@ The UI is not built until Paulo approves a layout in `plans/ui-prototipo/index.h
 - **Every upload is kept server-side** as history; a bad upload is never the only copy. When both
   played without the other (offline, or lock ignored), the app shows "Vocês jogaram separados" and
   the player picks which one goes on; the other stays in history.
+- **Names are Steam nicks, read automatically** (`Steam/config/loginusers.vdf`, `PersonaName`) and sent with the pairing; nobody types a name.
 - **Pairing by code**: share a world → code like `ENSH-7KQ2` (24 h, one use) → the friend pastes it
   and the world lands in a free save slot on their PC.
 
