@@ -76,13 +76,13 @@
   </div>
 {/snippet}
 {#snippet brand()}
-  <div class="brand"><span class="logo"></span><span><span class="light">Shroud</span><b>topia</b></span></div>
+  <div class="brand"><img class="st-logo" src="/art/shroudtopia-logo.svg" alt="Shroudtopia" /></div>
 {/snippet}
 {#snippet chip()}
   <span class="chip"><span class="dot" class:live={game}></span>{game ? "Enshrouded aberto" : "Enshrouded fechado"}</span>
 {/snippet}
 
-<div class="win">
+<div class="win skin-st">
   {#if !s}
     {@render titlebar()}
   {:else}
@@ -106,7 +106,8 @@
           </div>
         {/if}
       </aside>
-      <div style="display:flex;flex-direction:column;min-height:0">
+      <div class="st-main" style="display:flex;flex-direction:column;min-height:0">
+        <div class="st-scene" aria-hidden="true"><img src="/art/mist-valley.jpg" alt="" /></div>
         <div class="app-head" style="padding-top:0;border-bottom:0;padding-bottom:4px" data-tauri-drag-region>
           <span class="spacer"></span>{@render chip()}
           <button class="icon-btn" title="Configurações" aria-label="Configurações" onclick={() => (tab = "update")}>{@html ICON.gear}</button>

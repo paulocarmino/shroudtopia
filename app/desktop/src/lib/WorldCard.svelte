@@ -14,6 +14,7 @@
 
 <div class="card">
   <div class="w2-head">
+    <img class="st-medal" src="/art/world-medallion.png" alt="" aria-hidden="true" />
     <div class="txt" title={w.line}><h3>{w.name}</h3><Status tone={w.tone} text={w.status} /></div>
     {#if w.state !== "diverged" && w.action}<Btn action={w.action} {busy} onclick={() => onaction(w.action!.kind)} />{/if}
   </div>

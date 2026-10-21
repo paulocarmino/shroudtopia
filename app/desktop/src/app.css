@@ -328,3 +328,70 @@ input, select { font: inherit; }
 .row .actions { display: flex; gap: 8px; }
 .tg[disabled] { opacity: .45; cursor: not-allowed; }
 .hist-row .when { white-space: nowrap; }
+
+/* ---------- Shroudtopia art direction V2 (app/plans/ui-redesign-v2/kit/SHROUDTOPIA_ART_DIRECTION.md) ----------
+   Applied on the window root as .skin-st; the sidebar shrine was left out on Paulo's call (2026-10-21). */
+/* ---------- Shroudtopia skin (SHROUDTOPIA_ART_DIRECTION.md §6–§8) ---------- */
+.skin-st {
+  --bg: #101519; --rail: #13191e; --surface: #1b2329; --surface-2: #232d34; --hover: #2b363e;
+  --border: #3b4851; --control-line: #81939d;
+  --ink: #f2e9d8; --muted: #b9c4c8; --faint: #96a5ad;
+  --brand: #dda15a; --brand-hover: #edb777; --brand-pressed: #c88b45; --brand-ink: #171b1d; --brand-soft: #332b23; --brand-ring: #9acbd8;
+  --friend: #9acbd8; --friend-hover: #b3dce5; --friend-soft: #20323b;
+  --ok: #92bd9b; --ok-soft: #23372c; --warn: #e5c16b; --warn-soft: #3a3323; --danger: #ec9690; --danger-soft: #3d2729;
+  --radius: 8px; --radius-sm: 6px;
+}
+.skin-st { background: var(--bg); }
+.skin-st .rail { background: var(--rail); }
+.skin-st .rail .brand { display: flex; align-items: center; justify-content: center; gap: 11px; padding: 4px 0 20px; }
+.skin-st .nav { position: relative; }
+.skin-st .nav:hover { background: var(--hover); }
+.skin-st .nav[aria-selected="true"] { background: var(--surface-2); color: var(--ink); box-shadow: inset 2px 0 0 var(--brand); }
+.skin-st .nav[aria-selected="true"] svg { color: var(--brand); }
+.skin-st .badge { border-radius: 4px; }
+.skin-st .card { box-shadow: 0 6px 18px rgb(0 0 0 / 14%); }
+.skin-st .btn { border-color: var(--control-line); transition: background .14s, color .14s; }
+.skin-st .btn:hover { background: var(--hover); }
+.skin-st .btn:active { transform: none; }
+.skin-st .btn.primary { border-color: var(--brand); }
+.skin-st .btn.primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); }
+.skin-st .btn.primary:active { background: var(--brand-pressed); }
+.skin-st .btn.friend { background: var(--friend); border-color: var(--friend); color: var(--brand-ink); }
+.skin-st .btn.friend:hover { background: var(--friend-hover); }
+.skin-st :focus-visible { outline: 2px solid var(--friend); outline-offset: 3px; }
+.skin-st .dot.live { animation: none; }
+.skin-st .chip { border-color: var(--border); }
+.skin-st .tg .track { border-color: var(--control-line); }
+.skin-st .tg .track::after { background: var(--ink); }
+.skin-st .tg[aria-checked="true"] .track::after { background: var(--brand-ink); }
+.skin-st .tag { border-radius: 4px; }
+.skin-st .tag.here { background: var(--surface-2); color: var(--ink); }
+.skin-st .tag.cloud { background: var(--friend-soft); color: var(--friend); }
+.skin-st .tag.live { background: var(--brand-soft); color: var(--brand); }
+.skin-st .tag.friendlive { background: var(--friend-soft); color: var(--friend); }
+.skin-st .hist-row.current { background: rgb(255 255 255 / 0.025); }
+.skin-st .avatar.me { background: var(--brand-soft); color: var(--brand); }
+.skin-st .avatar.friend { background: var(--friend-soft); color: var(--friend); }
+.skin-st .upd.avail { background: var(--surface); border-color: transparent; }
+.skin-st .upd-wrap.avail { border-color: var(--border) !important; }
+.skin-st .upd.avail .upd-ico { background: var(--brand-soft); color: var(--brand); }
+.skin-st .modgroup.off .opts { opacity: 1; pointer-events: auto; }
+.skin-st .mod-row.off .name { color: var(--muted); }
+.skin-st .steps i.on { background: var(--brand); }
+.skin-st .pick .opt-card:hover { background: var(--hover); border-color: var(--control-line); }
+.skin-st .choice:hover { border-color: var(--control-line); }
+.skin-st .field { border-color: var(--control-line); }
+.skin-st .field:focus-within { border-color: var(--friend); }
+
+/* ---------- kit V2: illustrations (SHROUDTOPIA_ART_DIRECTION.md V2 §3–§6) ---------- */
+.skin-st .rail .brand { display: flex; align-items: center; justify-content: center; padding: 6px 0 20px; }
+.skin-st .st-logo { display: block; width: 180px; height: auto; max-width: 100%; }
+.skin-st .rail { position: relative; }
+.skin-st .st-main { position: relative; isolation: isolate; }
+.skin-st .st-scene { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.skin-st .st-scene img { position: absolute; left: 0; bottom: 0; width: 100%; height: auto; opacity: .9;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%); mask-image: linear-gradient(to bottom, transparent 0, #000 22%); }
+.skin-st .st-main > .app-head, .skin-st .st-main > .app-body { position: relative; z-index: 1; }
+.skin-st .card { background: var(--surface); }
+.skin-st .w2-head { gap: 12px; }
+.skin-st .st-medal { width: 48px; height: 48px; flex: none; object-fit: contain; pointer-events: none; user-select: none; }

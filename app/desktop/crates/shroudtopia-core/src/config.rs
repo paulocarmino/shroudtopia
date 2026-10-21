@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::contract::Player;
 
-pub const SERVER_URL: &str = "https://shroudtopia.paulocarmino.com";
+pub const SERVER_URL: &str = "https://shroudtopia-api.paulocarmino.com";
+/// Where the API lived before the landing page took that host.
+const OLD_SERVER_URL: &str = "https://shroudtopia.paulocarmino.com";
 pub const DATA_FOLDER_NAME: &str = "Shroudtopia";
 
 /// Size and modification time of a file, to tell "unchanged" without hashing it.
@@ -129,7 +131,8 @@ impl ConfigStore {
         match fs::read_to_string(&self.path) {
             Ok(text) => match serde_json::from_str::<AppConfig>(&text) {
                 Ok(mut cfg) => {
-                    if cfg.server_url.trim().is_empty() {
+                    // the API left the landing page's host on 2026-10-21; a config saved before that still names it
+                    if cfg.server_url.trim().is_empty() || cfg.server_url.trim_end_matches('/') == OLD_SERVER_URL {
                         cfg.server_url = SERVER_URL.into();
                     }
                     cfg
@@ -173,5 +176,10 @@ mod tests {
         // an old config with fields missing reads with defaults
         fs::write(store.path(), r#"{"token":"t"}"#).unwrap();
         assert_eq!(store.load().server_url, SERVER_URL);
+        // a config saved while the API lived on the landing page's host moves to the API host; any other URL stays
+        fs::write(store.path(), r#"{"serverUrl":"https://shroudtopia.paulocarmino.com/"}"#).unwrap();
+        assert_eq!(store.load().server_url, SERVER_URL);
+        fs::write(store.path(), r#"{"serverUrl":"http://localhost:8790"}"#).unwrap();
+        assert_eq!(store.load().server_url, "http://localhost:8790");
     }
 }
