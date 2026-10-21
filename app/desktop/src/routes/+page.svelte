@@ -85,18 +85,6 @@
 <div class="win">
   {#if !s}
     {@render titlebar()}
-  {:else if firstRun}
-    {@render titlebar()}
-    <div class="app-head" data-tauri-drag-region>{@render brand()}<span class="spacer"></span>{@render chip()}</div>
-    <FirstRun
-      {s}
-      start={codeScreen ? "code" : "choose"}
-      invite={codeScreen}
-      ondone={() => {
-        codeScreen = null;
-        holdFirstRun = false;
-      }}
-    />
   {:else}
     {@render titlebar()}
     <div class="split">
@@ -124,7 +112,19 @@
           <button class="icon-btn" title="Configurações" aria-label="Configurações" onclick={() => (tab = "update")}>{@html ICON.gear}</button>
         </div>
         <div class="app-body">
-          {#if tab === "world"}
+          {#if tab === "world" && firstRun}
+            <!-- login and pairing live in the Mundo tab, so Mods and Atualização never wait on them -->
+            <FirstRun
+              {s}
+              embedded
+              start={codeScreen ? "code" : "choose"}
+              invite={codeScreen}
+              ondone={() => {
+                codeScreen = null;
+                holdFirstRun = false;
+              }}
+            />
+          {:else if tab === "world"}
             <div class="sec">
               <div class="sec-title"><h2>Mundo compartilhado</h2>{#if w}<span class="aside">{w.aside}</span>{/if}</div>
               {#if w}

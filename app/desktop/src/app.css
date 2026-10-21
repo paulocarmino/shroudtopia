@@ -283,6 +283,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- first run ---------- */
 .fr { flex: 1; min-height: 0; overflow-y: auto; padding: 26px 40px 30px; display: grid; gap: 18px; align-content: start; }
+.fr.embedded { padding: 0; overflow: visible; }
 .fr h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .fr .lead { margin: 0; color: var(--muted); max-width: 52ch; }
 .pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

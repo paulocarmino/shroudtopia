@@ -6,7 +6,7 @@
   import Status from "./Status.svelte";
   import Note from "./Note.svelte";
 
-  let { s, start = "choose", invite = null, ondone }: { s: UiState; start?: string; invite?: string | null; ondone: () => void } = $props();
+  let { s, start = "choose", invite = null, embedded = false, ondone }: { s: UiState; start?: string; invite?: string | null; embedded?: boolean; ondone: () => void } = $props();
 
   const sync = $derived(s.sync);
   const login = $derived(sync?.phase === "login");
@@ -79,7 +79,7 @@
   const freeSlot = $derived(slots ? (into === "steam" ? slots.freeSteam : slots.freeLocal) : null);
 </script>
 
-<div class="fr">
+<div class="fr" class:embedded>
   {#if login}
     <div class="steps"><i class="on"></i><i></i><i></i></div>
     <h2>Entrar com a Steam</h2>
