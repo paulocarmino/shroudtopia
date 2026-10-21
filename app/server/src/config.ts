@@ -13,6 +13,8 @@ export interface Config {
   dataDir: string
   /** scheme://host[:port], no trailing slash: the Steam login's return_to and realm are built from it */
   publicOrigin: string
+  /** the landing page's hostname and folder (app/landing); null host: no landing page */
+  landing: { host: string; dir: string } | null
   /** how many proxies stand in front (1 behind Envoy) */
   trustProxy: number
   /** the commit the image was built from, or "dev" */
@@ -72,9 +74,13 @@ export function loadConfig(env: Env = process.env): Config {
   } catch {
     throw new Error('SHROUDTOPIA_PUBLIC_ORIGIN must be an http(s) URL')
   }
+  const landingDir = env.SHROUDTOPIA_LANDING_DIR || '../landing'
+  const landingHost = (env.SHROUDTOPIA_LANDING_HOST ?? '').trim()
+  if (landingHost && landingHost === new URL(publicOrigin).hostname) throw new Error('SHROUDTOPIA_LANDING_HOST must not be the API host')
   return {
     port,
     publicOrigin,
+    landing: landingHost ? { host: landingHost, dir: isAbsolute(landingDir) ? landingDir : resolve(PACKAGE_DIR, landingDir) } : null,
     host: env.HOST || '127.0.0.1',
     dataDir: isAbsolute(dataDir) ? dataDir : resolve(PACKAGE_DIR, dataDir),
     trustProxy: integer(env, 'SHROUDTOPIA_TRUST_PROXY', 0, 0, 8),

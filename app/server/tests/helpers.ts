@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import type { FastifyInstance } from 'fastify'
 import { buildServer } from '../src/app.ts'
+import type { LandingFile } from '../src/landing.ts'
 import type { ObjectStore } from '../src/object-store.ts'
 import { Sync } from '../src/sync.ts'
 
@@ -105,14 +106,14 @@ export interface Harness {
   close(): Promise<void>
 }
 
-export async function harness(): Promise<Harness> {
+export async function harness(options: { landing?: { host: string; files: Map<string, LandingFile> } } = {}): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), 'shroudtopia-'))
   const clock = { now: Date.parse('2026-10-21T21:00:00.000Z') }
   const sync = new Sync(join(dir, 'test.sqlite'), { clock: () => clock.now })
   const store = new MemoryStore()
   const steam = new FakeSteam()
   await steam.start()
-  const app = await buildServer({ sync, store, steam: { origin: ORIGIN, endpoint: steam.endpoint }, build: 'test' })
+  const app = await buildServer({ sync, store, steam: { origin: ORIGIN, endpoint: steam.endpoint }, build: 'test', ...options })
   return {
     app,
     sync,

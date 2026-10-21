@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import secureJson from 'secure-json-parse'
 import { ULID, ulid } from './ids.ts'
 import { avatarKey, worldFileKey, type ObjectStore } from './object-store.ts'
+import { hostOf, type LandingFile } from './landing.ts'
 import { donePage, failPage, SteamLoginError, steamLoginUrl, verifySteamAssertion, type SteamSettings } from './steam.ts'
 import { SyncError, type Player, type Sync } from './sync.ts'
 
@@ -12,6 +13,8 @@ export interface ServerOptions {
   store: ObjectStore
   /** the public origin and Steam's OpenID endpoint */
   steam: SteamSettings
+  /** the landing page's hostname and files; requests for that Host get those files and nothing else */
+  landing?: { host: string; files: Map<string, LandingFile> }
   /** login sessions one address may start per window */
   loginStarts?: { max: number; windowMs: number }
   build?: string
@@ -96,6 +99,22 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const code = status === 413 ? 'too_large' : status >= 500 ? 'internal' : 'bad_request'
     return reply.status(status).send({ error: code, message: status >= 500 ? 'internal error' : (fastifyError.message ?? 'bad request') })
   })
+  // The landing host is answered here, before any route: its files, or a plain 404. The raw Host header decides
+  // (what Envoy routed on), never X-Forwarded-Host, which a client could write.
+  const landing = options.landing
+  if (landing) {
+    const landingHost = hostOf(landing.host)
+    app.addHook('onRequest', async (request, reply) => {
+      if (hostOf(request.headers.host) !== landingHost) return
+      const path = request.url.split('?')[0]!
+      const file = request.method === 'GET' || request.method === 'HEAD' ? landing.files.get(path) : undefined
+      if (!file) {
+        return reply.status(404).header('content-type', 'text/plain; charset=utf-8').header('cache-control', 'no-store').send('Not found\n')
+      }
+      return reply.header('content-type', file.type).header('cache-control', file.cache).header('x-content-type-options', 'nosniff').send(file.body)
+    })
+  }
+
   app.setNotFoundHandler((request, reply) => reply.status(404).send({ error: 'not_found', message: `no route ${request.method} ${request.url}` }))
 
   const authenticate = async (request: FastifyRequest) => {
