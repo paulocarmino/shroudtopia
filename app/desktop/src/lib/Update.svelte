@@ -10,11 +10,11 @@
   let { s, busy, onupdate, onfolder, onautostart, onstore, oninvite, onlogout }: {
     s: UiState; busy: boolean;
     onupdate: () => void; onfolder: () => void; onautostart: (on: boolean) => void;
-    onstore: (into: string) => void; oninvite: () => void; onlogout: () => void;
+    onstore: (world: string, into: string) => void; oninvite: (world: string) => void; onlogout: () => void;
   } = $props();
   const u = $derived(s.update);
   const avail = $derived(u.state === "avail" || u.state === "blocked");
-  const world = $derived(s.sync?.world ?? null);
+  const worlds = $derived(s.sync?.worlds ?? []);
 </script>
 
 <div class="sec">
@@ -45,19 +45,20 @@
       <div class="txt"><div class="name">Iniciar com o Windows</div><div class="sub">Fica na bandeja e cuida do sync sozinho</div></div>
       <Toggle on={s.settings.autostart} label="Iniciar com o Windows" onchange={onautostart} />
     </div>
-    {#if world}
+    {#each worlds as world (world.id)}
+      <!-- per world: where it lives on this PC, and its own invite code -->
       <div class="row">
-        <div class="txt"><div class="name">Onde o mundo fica</div><div class="sub">{world.file} · {world.store === "steam" ? "jogos salvos do Steam" : "jogos salvos locais"}</div></div>
+        <div class="txt"><div class="name">Onde o mundo fica</div><div class="sub">{world.name} · {world.file} · {world.store === "steam" ? "jogos salvos do Steam" : "jogos salvos locais"}</div></div>
         <div class="seg small">
-          <button aria-pressed={world.store === "steam"} disabled={busy || !s.settings.steamStore} onclick={() => onstore("steam")}>Steam</button>
-          <button aria-pressed={world.store === "local"} disabled={busy || !s.settings.localStore} onclick={() => onstore("local")}>Local</button>
+          <button aria-pressed={world.store === "steam"} disabled={busy || !s.settings.steamStore} onclick={() => onstore(world.id, "steam")}>Steam</button>
+          <button aria-pressed={world.store === "local"} disabled={busy || !s.settings.localStore} onclick={() => onstore(world.id, "local")}>Local</button>
         </div>
       </div>
       <div class="row">
         <div class="txt"><div class="name">Convidar amigo</div><div class="sub">Um código novo para o {world.name}</div></div>
-        <button class="btn" disabled={busy} onclick={oninvite}>{@html ICON.link}Gerar código</button>
+        <button class="btn" disabled={busy} onclick={() => oninvite(world.id)}>{@html ICON.link}Gerar código</button>
       </div>
-    {/if}
+    {/each}
     {#if s.sync?.player}
       <div class="row">
         <span class="avatar me">{s.sync.player.initial}</span>

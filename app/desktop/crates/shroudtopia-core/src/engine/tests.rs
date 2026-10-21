@@ -4,6 +4,7 @@
 use super::*;
 use crate::saves::LocalStore;
 use crate::testing::FakeServer;
+use crate::view::WorldView;
 use chrono::TimeZone;
 
 fn br() -> FixedOffset {
@@ -142,9 +143,9 @@ fn sharing_and_redeeming() {
     assert_eq!(w.me.e.state(), SyncState::Sync);
     assert_eq!(w.fr.e.state(), SyncState::Sync);
     let s = w.me.e.snapshot();
-    let v = s.world.unwrap();
+    let v = s.worlds[0].clone();
     assert_eq!(v.status, "Em dia");
-    assert_eq!(v.aside, "com rodrigao_br");
+    assert_eq!(v.with, "com rodrigao_br");
     assert_eq!(v.action.unwrap().label, "Jogar");
     assert_eq!(v.history[0].tags.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(), ["neste PC", "no servidor"]);
     assert_eq!(s.people[1].sub, "online");
@@ -157,17 +158,19 @@ fn sharing_and_redeeming() {
 fn a_session_hosts_autosaves_and_closes() {
     let mut w = World2::new();
     w.at(60);
+    // "Jogar" on this world's card: its lease is taken as the game starts
+    w.me.e.play(None).unwrap();
     w.tick(true, false);
-    assert!(w.me.e.rt.lock_mine, "the game started: the lease is taken");
+    assert!(w.me.e.rt.lock_mine, "the game started from this world's Jogar: the lease is taken");
     assert_eq!(w.me.e.state(), SyncState::Me);
     assert_eq!(w.fr.e.state(), SyncState::Friend);
     let fr_view = w.fr.e.snapshot();
-    let fv = fr_view.world.unwrap();
+    let fv = fr_view.worlds[0].clone();
     assert_eq!(fv.status, "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ está hospedando");
     assert_eq!(fv.line, "Desde 14:01 · o mundo fica com ele até fechar o jogo");
     assert_eq!(fv.action.unwrap().kind, "join");
     assert_eq!(fv.history[0].tags[0].cls, "friendlive");
-    let mv = w.me.e.snapshot().world.unwrap();
+    let mv = w.me.e.snapshot().worlds[0].clone();
     assert_eq!(mv.status, "Você está hospedando");
     assert_eq!(mv.line, "Desde 14:01 · nenhum autosave enviado ainda");
     assert!(mv.action.unwrap().disabled);
@@ -187,7 +190,7 @@ fn a_session_hosts_autosaves_and_closes() {
     let head = w.server.world(&id).head.unwrap();
     assert_eq!(head.parent, base, "the autosave's parent is what the file came from");
     assert!(head.ended_at.is_none());
-    assert_eq!(w.me.e.snapshot().world.unwrap().line, "Desde 14:01 · último autosave enviado às 14:01");
+    assert_eq!(w.me.e.snapshot().worlds[0].clone().line, "Desde 14:01 · último autosave enviado às 14:01");
     // the friend does not pull while Paulo hosts
     assert_eq!(w.fr.read(1), b"world v1");
 
@@ -217,11 +220,11 @@ fn a_session_hosts_autosaves_and_closes() {
     let backup = w.fr.data.join("backup").join(format!("world1.ksd.shroudtopia-{}", fin.version_id));
     assert_eq!(fs::read(backup).unwrap(), b"world v1");
     assert_eq!(w.fr.e.state(), SyncState::Sync);
-    let line = w.fr.e.snapshot().world.unwrap().line;
+    let line = w.fr.e.snapshot().worlds[0].clone().line;
     assert!(line.starts_with("[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ jogou por último · hoje, "), "{line}");
     assert!(line.ends_with(" de sessão"));
     // one row per session in the history (the autosave and the final upload are one)
-    let rows = w.fr.e.snapshot().world.unwrap().history;
+    let rows = w.fr.e.snapshot().worlds[0].clone().history;
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].when, "hoje, 14:01 – 14:10");
 }
@@ -240,7 +243,7 @@ fn a_pull_never_happens_with_the_game_open() {
     w.tick(true, false);
     assert_eq!(w.me.read(0), b"world v1");
     assert_eq!(w.me.e.state(), SyncState::Behind);
-    assert!(w.me.e.snapshot().world.unwrap().line.ends_with("baixa quando você fechar o jogo"));
+    assert!(w.me.e.snapshot().worlds[0].clone().line.ends_with("baixa quando você fechar o jogo"));
     assert!(!w.me.e.rt.lock_mine, "playing an old copy as host would lose the friend's session");
     assert!(w.me.e.pull(&w.server.world(&w.me.e.cfg.world.as_ref().unwrap().world_id).head.unwrap()).is_err());
     w.at(30);
@@ -258,7 +261,7 @@ fn play_pulls_first() {
     w.fr.e.refresh();
     w.fr.e.tick(w.now, br(), false);
     // Paulo's app has not ticked since: "Jogar" pulls before it starts the game
-    assert_eq!(w.me.e.play().unwrap(), STEAM_PLAY);
+    assert_eq!(w.me.e.play(None).unwrap(), STEAM_PLAY);
     assert_eq!(w.me.read(0), b"friend session");
 }
 
@@ -269,7 +272,7 @@ fn offline_queue_goes_up_when_the_server_answers() {
     w.at(60);
     w.tick(true, false);
     assert_eq!(w.me.e.state(), SyncState::Offline);
-    let v = w.me.e.snapshot().world.unwrap();
+    let v = w.me.e.snapshot().worlds[0].clone();
     assert_eq!(v.status, "Sem conexão com o servidor");
     assert_eq!(v.note.unwrap().text, "Se o rodrigao_br jogar nesse meio-tempo, vocês vão ter que escolher qual versão segue.");
     w.me.write(0, b"offline session");
@@ -318,7 +321,7 @@ fn playing_apart_diverges_and_either_side_can_win() {
         assert!(w.server.world(&id).diverged);
         assert_eq!(w.me.e.state(), SyncState::Diverged);
         assert_eq!(w.fr.e.state(), SyncState::Diverged);
-        let v = w.me.e.snapshot().world.unwrap();
+        let v = w.me.e.snapshot().worlds[0].clone();
         assert_eq!(v.status, "Vocês jogaram separados");
         let c = v.choices.unwrap();
         assert_eq!(c.mine.t, "Seguir com a sua");
@@ -329,7 +332,7 @@ fn playing_apart_diverges_and_either_side_can_win() {
         assert_eq!(w.me.read(0), b"paulo apart");
         assert_eq!(w.fr.read(1), b"friend apart");
 
-        w.me.e.resolve(keep_mine).unwrap();
+        w.me.e.resolve(None, keep_mine).unwrap();
         let world = w.server.world(&id);
         assert!(!world.diverged);
         w.at(10);
@@ -351,7 +354,7 @@ fn the_up_state_while_the_final_upload_runs() {
     let seen: Arc<std::sync::Mutex<Vec<(SyncState, Option<u8>, String)>>> = Default::default();
     let s2 = seen.clone();
     w.me.e.set_publisher(Arc::new(move |s: &Snapshot| {
-        if let Some(v) = &s.world {
+        if let Some(v) = s.worlds.first() {
             s2.lock().unwrap().push((v.state, v.progress.as_ref().map(|p| p.pct), v.status.clone()));
         }
     }));
@@ -369,6 +372,7 @@ fn a_friends_lock_blocks_the_pull_and_a_late_lock_is_taken() {
     let mut w = World2::new();
     // the friend hosts; an autosave of his moves the head
     w.at(60);
+    w.fr.e.play(None).unwrap();
     w.tick(false, true);
     w.fr.write(1, b"friend autosave");
     w.at(6);
@@ -402,7 +406,7 @@ fn moving_the_world_between_stores_copies_it() {
     e.share(StoreKind::Steam, 0, StoreKind::Local, "zz").unwrap();
     assert_eq!(fs::read(b.join("world0.ksd")).unwrap(), b"cloud world");
     assert_eq!(e.cfg.world.as_ref().unwrap().store, StoreKind::Local);
-    e.move_store(StoreKind::Steam).unwrap();
+    e.move_store(None, StoreKind::Steam).unwrap();
     let link = e.cfg.world.clone().unwrap();
     assert_eq!((link.store, link.slot), (StoreKind::Steam, 1));
     assert_eq!(fs::read(a.join("world1.ksd")).unwrap(), b"cloud world");
@@ -414,6 +418,7 @@ fn moving_the_world_between_stores_copies_it() {
 fn an_app_restarted_with_the_game_open_keeps_hosting() {
     let mut w = World2::new();
     w.at(60);
+    w.me.e.play(None).unwrap();
     w.tick(true, false);
     assert!(w.me.e.rt.lock_mine);
     // the app restarts (a crash, an update): a new engine on the same data folder, the game still open
@@ -435,4 +440,215 @@ fn an_app_restarted_with_the_game_open_keeps_hosting() {
     again.tick(w.now, br(), true);
     let id = again.cfg.world.as_ref().unwrap().world_id.clone();
     assert_eq!(w.server.file(&id, &w.server.world(&id).head.unwrap().version_id), b"after the restart");
+}
+
+// ---------------------------------------------------------------------- several worlds
+
+/// The two-PC setup with a second shared world: Paulo's world1 ("Outro"), which the friend redeems into his next
+/// free slot (2). Returns the ids of "Mundo do bang" (A: Paulo's slot 0, the friend's 1) and "Outro" (B: 1 and 2).
+fn two_worlds() -> (World2, String, String) {
+    let mut w = World2::new();
+    let a = w.me.e.cfg.world.as_ref().unwrap().world_id.clone();
+    w.me.write(1, b"outro v1");
+    // the slot already shared cannot be shared again
+    assert_eq!(w.me.e.share(StoreKind::Local, 0, StoreKind::Local, "de novo").unwrap_err(), "Esse mundo já está compartilhado.");
+    let invite = w.me.e.share(StoreKind::Local, 1, StoreKind::Local, "Outro").unwrap();
+    let b = w.me.e.cfg.world.as_ref().unwrap().world_id.clone();
+    assert_ne!(a, b);
+    // each world has its own invite
+    let invite_a = w.me.e.new_invite(Some(&a)).unwrap();
+    assert_ne!(invite_a.code, invite.code);
+    w.fr.e.redeem(&invite.code, StoreKind::Local).unwrap();
+    assert_eq!(w.fr.e.cfg.world.as_ref().unwrap().slot, 2, "slot 1 is already the friend's copy of the first world");
+    assert_eq!(w.fr.read(2), b"outro v1");
+    assert_eq!(w.fr.read(1), b"world v1");
+    // a code of a world he already has gives it back and changes nothing
+    w.fr.e.redeem(&invite_a.code, StoreKind::Local).unwrap();
+    assert_eq!(w.fr.e.world_ids(), [a.clone(), b.clone()]);
+    w.tick(false, false);
+    (w, a, b)
+}
+
+fn view_of(e: &mut Engine, id: &str) -> WorldView {
+    e.snapshot().worlds.into_iter().find(|v| v.id == id).unwrap()
+}
+
+#[test]
+fn two_worlds_are_two_cards_with_their_own_chains() {
+    let (mut w, a, b) = two_worlds();
+    let s = w.me.e.snapshot();
+    assert_eq!(s.worlds.iter().map(|v| (v.name.as_str(), v.file.as_str(), v.state)).collect::<Vec<_>>(), [("Mundo do bang", "world0.ksd", SyncState::Sync), ("Outro", "world1.ksd", SyncState::Sync)]);
+    assert_eq!(s.worlds[0].with, "com rodrigao_br");
+    // the friend is in both worlds and in the sidebar once
+    assert_eq!(s.people.iter().map(|p| p.nick.as_str()).collect::<Vec<_>>(), ["[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ", "rodrigao_br"]);
+    // each world's base is its own
+    w.me.e.select(&a).unwrap();
+    let base_a = w.me.e.cfg.world.as_ref().unwrap().base.clone();
+    w.me.e.select(&b).unwrap();
+    let base_b = w.me.e.cfg.world.as_ref().unwrap().base.clone();
+    assert_ne!(base_a, base_b);
+    assert_eq!(w.server.world(&b).head.unwrap().version_id, base_b.unwrap());
+}
+
+#[test]
+fn hosting_one_world_while_the_other_pulls() {
+    let (mut w, a, b) = two_worlds();
+    // the friend plays "Outro" and closes: its head moves
+    w.at(60);
+    w.fr.e.play(Some(&b)).unwrap();
+    w.tick(false, true);
+    assert_eq!(w.server.world(&b).lock.unwrap().holder, "76561198000000001", "his Jogar took that world's lease");
+    assert!(w.server.world(&a).lock.is_none(), "and only that one");
+    w.fr.write(2, b"outro, friend session");
+    w.at(600);
+    w.tick(false, false);
+    assert!(w.server.world(&b).lock.is_none());
+
+    // Paulo plays "Mundo do bang" from its card; "Outro" is behind but the game is open: no pull, no lease
+    w.at(60);
+    w.me.e.play(Some(&a)).unwrap();
+    assert_eq!(w.me.read(1), b"outro v1", "Jogar pulls its own world only");
+    w.tick(true, false);
+    assert_eq!(w.server.world(&a).lock.unwrap().holder, "76561198065863968");
+    assert!(w.server.world(&b).lock.is_none(), "a lease per world: Outro's is not taken");
+    assert_eq!(view_of(&mut w.me.e, &a).state, SyncState::Me);
+    assert_eq!(view_of(&mut w.me.e, &b).state, SyncState::Behind);
+    assert_eq!(view_of(&mut w.fr.e, &a).state, SyncState::Friend);
+    assert_eq!(view_of(&mut w.fr.e, &b).state, SyncState::Sync);
+    w.me.write(0, b"bang, paulo session");
+    w.at(6);
+    w.tick(true, false);
+    w.at(6);
+    w.tick(true, false);
+    assert_eq!(w.server.file(&a, &w.server.world(&a).head.unwrap().version_id), b"bang, paulo session", "the autosave of the world played");
+    assert_eq!(w.me.read(1), b"outro v1");
+
+    // Paulo closes: his session goes up and the lease back; "Outro" is pulled now; the friend pulls "Mundo do bang"
+    w.at(600);
+    w.tick(false, false);
+    assert!(w.server.world(&a).lock.is_none());
+    assert_eq!(w.me.read(1), b"outro, friend session");
+    w.at(10);
+    w.tick(false, false);
+    assert_eq!(w.fr.read(1), b"bang, paulo session");
+    for id in [&a, &b] {
+        assert_eq!(view_of(&mut w.me.e, id).state, SyncState::Sync);
+    }
+    assert_eq!(view_of(&mut w.fr.e, &a).state, SyncState::Sync);
+}
+
+#[test]
+fn a_world_takes_its_lease_on_the_first_write_of_its_slot() {
+    let (mut w, a, b) = two_worlds();
+    // the game was started from "Mundo do bang", but the world opened in it is "Outro"
+    w.at(60);
+    w.me.e.play(Some(&a)).unwrap();
+    w.tick(true, false);
+    assert!(w.server.world(&b).lock.is_none());
+    w.me.write(1, b"outro, paulo session");
+    w.at(1);
+    w.tick(true, false);
+    assert_eq!(w.server.world(&b).lock.unwrap().holder, "76561198065863968", "the first write of Outro's slot took its lease");
+    w.at(6);
+    w.tick(true, false);
+    assert_eq!(w.server.file(&b, &w.server.world(&b).head.unwrap().version_id), b"outro, paulo session");
+    // heartbeats keep both while the game runs; both go back when it closes
+    for _ in 0..7 {
+        w.at(60);
+        w.tick(true, false);
+    }
+    assert!(w.server.world(&a).lock.is_some() && w.server.world(&b).lock.is_some());
+    w.at(60);
+    w.tick(false, false);
+    assert!(w.server.world(&a).lock.is_none() && w.server.world(&b).lock.is_none());
+    assert_eq!(view_of(&mut w.fr.e, &a).state, SyncState::Sync, "nothing went up for the world not played");
+
+    // a slot written while someone else holds that world's lease: no lease, the upload waits (as with one world)
+    w.at(60);
+    w.fr.e.play(Some(&b)).unwrap();
+    w.tick(false, true);
+    w.at(60);
+    w.tick(true, true);
+    w.me.write(1, b"outro while the friend hosts");
+    w.at(1);
+    w.tick(true, true);
+    w.at(6);
+    w.tick(true, true);
+    assert_eq!(w.server.world(&b).lock.unwrap().holder, "76561198000000001");
+    assert_eq!(view_of(&mut w.me.e, &b).state, SyncState::Friend);
+}
+
+#[test]
+fn a_jogar_from_long_ago_takes_no_lease() {
+    let (mut w, a, _b) = two_worlds();
+    // "Jogar" on Mundo do bang, but the game did not start then; it is started from Steam 10 minutes later
+    w.me.e.play(Some(&a)).unwrap();
+    w.at(600);
+    w.tick(true, false);
+    assert!(w.server.world(&a).lock.is_none(), "an old Jogar says nothing about the world opened now");
+    // its slot written: now it is the world played
+    w.me.write(0, b"bang, later");
+    w.at(1);
+    w.tick(true, false);
+    assert_eq!(w.server.world(&a).lock.unwrap().holder, "76561198065863968");
+}
+
+#[test]
+fn a_branch_on_one_world_only() {
+    let (mut w, a, b) = two_worlds();
+    // Paulo plays "Outro" offline; the friend plays it online; Paulo comes back: Outro diverges, the other does not
+    w.server.set_offline(true);
+    w.at(60);
+    w.me.e.play(Some(&b)).ok();
+    w.me.e.tick(w.now, br(), true);
+    w.me.write(1, b"outro, paulo apart");
+    w.at(600);
+    w.me.e.tick(w.now, br(), false);
+    w.server.set_offline(false);
+    w.fr.e.refresh();
+    w.fr.e.play(Some(&b)).unwrap();
+    w.fr.e.tick(w.now, br(), true);
+    w.fr.write(2, b"outro, friend apart");
+    w.at(600);
+    w.fr.e.tick(w.now, br(), false);
+    w.at(10);
+    w.tick(false, false);
+    assert!(w.server.world(&b).diverged);
+    assert!(!w.server.world(&a).diverged);
+    let s = w.me.e.snapshot();
+    assert_eq!(s.worlds.iter().map(|v| v.state).collect::<Vec<_>>(), [SyncState::Sync, SyncState::Diverged]);
+    assert!(s.worlds[1].choices.is_some() && s.worlds[0].choices.is_none());
+    // resolved on its card: only Outro changes
+    w.me.e.resolve(Some(&b), false).unwrap();
+    w.at(10);
+    w.tick(false, false);
+    assert_eq!(w.me.read(1), b"outro, friend apart");
+    assert_eq!(w.me.read(0), b"world v1");
+    assert_eq!(view_of(&mut w.me.e, &b).state, SyncState::Sync);
+}
+
+#[test]
+fn a_single_world_config_keeps_working_and_grows() {
+    let (w, a, _b) = two_worlds();
+    // Paulo's data folder as 0.1.3 left it: the config names one world in `world`
+    let cfg = fs::read_to_string(w.me.data.join("config.json")).unwrap();
+    let mut json: serde_json::Value = serde_json::from_str(&cfg).unwrap();
+    let first = json["worlds"][0].clone();
+    assert_eq!(first["worldId"], a.as_str());
+    json.as_object_mut().unwrap().remove("worlds");
+    json["world"] = first;
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("config.json"), json.to_string()).unwrap();
+    let stores = Stores { local: Some(Arc::new(LocalStore::new(w.me.saves.clone()))), steam: None };
+    let mut old = Engine::new(Box::new(w.server.client()), dir.path().into(), stores, None);
+    old.set_player(Player { steam_id: "76561198065863968".into(), nick: "[ツ] Ｌ　Ａ　Ｒ　Ａ　Ｎ　Ｊ　Ｏ".into() });
+    assert_eq!(old.world_ids(), [a.clone()]);
+    old.tick(w.now, br(), false);
+    assert_eq!(old.snapshot().worlds.len(), 1);
+    assert_eq!(old.state(), SyncState::Sync, "the migrated world is in sync with the server");
+    old.save();
+    // saved as the list from then on
+    let saved: serde_json::Value = serde_json::from_str(&fs::read_to_string(dir.path().join("config.json")).unwrap()).unwrap();
+    assert_eq!(saved["worlds"][0]["worldId"], a.as_str());
+    assert!(saved.get("world").is_none());
 }

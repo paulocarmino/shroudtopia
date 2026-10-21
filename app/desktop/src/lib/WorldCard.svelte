@@ -15,7 +15,7 @@
 <div class="card">
   <div class="w2-head">
     <img class="st-medal" src="/art/world-medallion.png" alt="" aria-hidden="true" />
-    <div class="txt" title={w.line}><h3>{w.name}</h3><Status tone={w.tone} text={w.status} /></div>
+    <div class="txt" title={w.line}><h3>{w.name}</h3><Status tone={w.tone} text={w.status} /><span class="with">{w.with}</span></div>
     {#if w.state !== "diverged" && w.action}<Btn action={w.action} {busy} onclick={() => onaction(w.action!.kind)} />{/if}
   </div>
   {#if w.progress}<div style="padding:0 16px 14px"><ProgressLine p={w.progress} /></div>{/if}

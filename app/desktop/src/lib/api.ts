@@ -12,14 +12,14 @@ export interface Tag { cls: string; text: string }
 export interface HistRow { who: "me" | "friend"; initial: string; name: string; when: string; size: string; tags: Tag[] }
 export interface Choice { initial: string; t: string; s: string }
 export interface WorldView {
-  name: string; aside: string; state: string; tone: Tone; status: string; line: string;
+  id: string; name: string; with: string; state: string; tone: Tone; status: string; line: string;
   action: Action | null; progress: Progress | null; note: { text: string; icon: string } | null;
   choices: { mine: Choice; theirs: Choice } | null; history: HistRow[]; file: string; store: "steam" | "local"; members: number;
 }
 export interface Person { nick: string; initial: string; me: boolean; sub: string; dot: string }
 export interface Snapshot {
   phase: "login" | "setup" | "main"; player: Person | null; gameRunning: boolean; online: boolean;
-  world: WorldView | null; people: Person[]; error: string | null;
+  worlds: WorldView[]; people: Person[]; error: string | null;
   login: { waiting: boolean; mismatch: string | null; steamNick: string | null; error: string | null };
 }
 export type OptValue =
@@ -35,7 +35,7 @@ export interface UiState {
   update: UpdateView;
   settings: { gameFolder: string | null; autostart: boolean; appVersion: string; steamFound: boolean; localStore: string | null; steamStore: string | null };
 }
-export interface SlotRow { store: "steam" | "local"; index: number; file: string; title: string; sub: string }
+export interface SlotRow { store: "steam" | "local"; index: number; file: string; title: string; sub: string; shared?: boolean }
 export interface Slots { slots: SlotRow[]; freeSteam: string | null; freeLocal: string | null; steam: boolean; local: boolean }
 export interface Invite { code: string; expiresAt: string }
 
@@ -64,23 +64,23 @@ function mockCall(cmd: string, args?: Record<string, unknown>): unknown {
 
 export const api = {
   state: () => call<UiState>("get_state"),
-  play: () => call<void>("play"),
-  join: () => call<{ note?: string } | null>("join"),
-  resolve: (keepMine: boolean) => call<void>("resolve", { keepMine }),
+  play: (world: string) => call<void>("play", { world }),
+  join: (world: string) => call<{ note?: string } | null>("join", { world }),
+  resolve: (world: string, keepMine: boolean) => call<void>("resolve", { world, keepMine }),
   loginStart: () => call<void>("login_start"),
   loginCancel: () => call<void>("login_cancel"),
   loginAcceptMismatch: () => call<void>("login_accept_mismatch"),
   logout: () => call<void>("logout"),
   slots: () => call<Slots>("list_slots"),
   share: (store: string, slot: number, into: string, name: string) => call<Invite>("share", { store, slot, into, name }),
-  newInvite: () => call<Invite>("new_invite"),
+  newInvite: (world?: string) => call<Invite>("new_invite", { world }),
   redeem: (code: string, into: string) => call<{ name: string; sub: string; initial: string }>("redeem", { code, into }),
   setMod: (modKey: string, key: string, value: unknown) => call<void>("set_mod", { modKey, key, value }),
   updateCheck: () => call<void>("update_check"),
   updateApply: () => call<void>("update_apply"),
   setAutostart: (on: boolean) => call<void>("set_autostart", { on }),
   chooseGameFolder: () => call<void>("choose_game_folder"),
-  moveStore: (into: string) => call<void>("move_store", { into }),
+  moveStore: (world: string, into: string) => call<void>("move_store", { world, into }),
 };
 
 export async function onState(cb: (s: UiState) => void): Promise<UnlistenFn> {

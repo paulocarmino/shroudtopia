@@ -61,9 +61,10 @@ fn open(app: &AppHandle, url: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn play(app: AppHandle) -> R {
+pub async fn play(app: AppHandle, world: Option<String>) -> R {
     blocking(move || {
-        let url = app.state::<Shared>().engine(|e| e.play())?;
+        // "Jogar" on a world's card: that world is pulled first and its lease is taken when the game starts
+        let url = app.state::<Shared>().engine(move |e| e.play(world.as_deref()))?;
         open(&app, url.as_str().unwrap_or(shroudtopia_core::engine::STEAM_PLAY))?;
         Ok(Value::Null)
     })
@@ -72,9 +73,15 @@ pub async fn play(app: AppHandle) -> R {
 
 /// "Entrar pelo Steam": the host's game through Steam (`steam://friends/joingame/<steamid64>`).
 #[tauri::command]
-pub async fn join(app: AppHandle) -> R {
+pub async fn join(app: AppHandle, world: Option<String>) -> R {
     blocking(move || {
-        let lock = app.state::<Shared>().engine(|e| e.foreign_lock().map(|l| (l.holder.clone(), l.nick.clone())).ok_or_else(|| "Ninguém está hospedando agora.".to_string()))?;
+        // the host of this card's world (each world has its own lease, so its own host)
+        let lock = app.state::<Shared>().engine(move |e| {
+            if let Some(id) = world.as_deref() {
+                e.select(id)?;
+            }
+            e.foreign_lock().map(|l| (l.holder.clone(), l.nick.clone())).ok_or_else(|| "Ninguém está hospedando agora.".to_string())
+        })?;
         let holder = lock.get(0).and_then(Value::as_str).unwrap_or_default().to_string();
         let nick = lock.get(1).and_then(Value::as_str).unwrap_or("o host").to_string();
         // Steam's "Join game" on the host. The current Steam client often ignores it when it comes from outside
@@ -94,8 +101,8 @@ pub async fn join(app: AppHandle) -> R {
 }
 
 #[tauri::command]
-pub async fn resolve(app: AppHandle, keep_mine: bool) -> R {
-    blocking(move || app.state::<Shared>().engine(move |e| e.resolve(keep_mine))).await
+pub async fn resolve(app: AppHandle, world: Option<String>, keep_mine: bool) -> R {
+    blocking(move || app.state::<Shared>().engine(move |e| e.resolve(world.as_deref(), keep_mine))).await
 }
 
 #[tauri::command]
@@ -143,6 +150,8 @@ struct SlotRow {
     file: String,
     title: String,
     sub: String,
+    /// already one of this PC's shared worlds: marked, and not picked again
+    shared: bool,
 }
 
 /// "Qual mundo?": the worlds of this PC, Steam Cloud's and the local folder's.
@@ -153,6 +162,12 @@ pub async fn list_slots(app: AppHandle) -> Value {
 
 fn slots(shared: &Shared) -> Value {
     let off = *chrono::Local::now().offset();
+    let taken = shared.engine(|e| Ok((e.taken_slots(StoreKind::Steam), e.taken_slots(StoreKind::Local)))).ok();
+    let taken_of = |k: StoreKind| -> Vec<u8> {
+        let pair = taken.as_ref().and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        let list = pair.get(if k == StoreKind::Steam { 0 } else { 1 }).and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        list.iter().filter_map(|n| n.as_u64().map(|n| n as u8)).collect()
+    };
     let mut rows = Vec::new();
     for (kind, store) in [(StoreKind::Steam, shared.stores.steam.clone()), (StoreKind::Local, shared.stores.local.clone())] {
         let Some(store) = store else { continue };
@@ -163,10 +178,11 @@ fn slots(shared: &Shared) -> Value {
                 file: s.file.clone(),
                 title: s.name.clone().unwrap_or_else(|| format!("Mundo {}", s.index + 1)),
                 sub: format!("{} · jogado em {} · {}", format::size(s.size), format::played_at(s.modified, off), if kind == StoreKind::Steam { "Steam" } else { "Local" }),
+                shared: taken_of(kind).contains(&s.index),
             });
         }
     }
-    let free = |k: StoreKind| shared.stores.get(k).and_then(|s| s.free_slot(&[])).map(steam::slot_file);
+    let free = |k: StoreKind| shared.stores.get(k).and_then(|s| s.free_slot(&taken_of(k))).map(steam::slot_file);
     json!({ "slots": rows, "freeSteam": free(StoreKind::Steam), "freeLocal": free(StoreKind::Local), "steam": shared.stores.steam.is_some(), "local": shared.stores.local.is_some() })
 }
 
@@ -176,8 +192,8 @@ pub async fn share(app: AppHandle, store: StoreKind, slot: u8, into: StoreKind, 
 }
 
 #[tauri::command]
-pub async fn new_invite(app: AppHandle) -> R {
-    blocking(move || app.state::<Shared>().engine(|e| e.new_invite())).await
+pub async fn new_invite(app: AppHandle, world: Option<String>) -> R {
+    blocking(move || app.state::<Shared>().engine(move |e| e.new_invite(world.as_deref()))).await
 }
 
 #[tauri::command]
@@ -261,8 +277,8 @@ pub async fn choose_game_folder(app: AppHandle) -> R {
 }
 
 #[tauri::command]
-pub async fn move_store(app: AppHandle, into: StoreKind) -> R {
-    blocking(move || app.state::<Shared>().engine(move |e| e.move_store(into))).await
+pub async fn move_store(app: AppHandle, world: Option<String>, into: StoreKind) -> R {
+    blocking(move || app.state::<Shared>().engine(move |e| e.move_store(world.as_deref(), into))).await
 }
 
 #[tauri::command]

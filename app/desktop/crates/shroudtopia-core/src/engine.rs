@@ -33,6 +33,8 @@ pub const STABLE: Duration = Duration::seconds(5);
 pub const HEARTBEAT: Duration = Duration::seconds(60);
 pub const FETCH_IDLE: Duration = Duration::seconds(10);
 pub const FETCH_PRESENCE: Duration = Duration::seconds(30);
+/// How long after a world's "Jogar" the game starting counts as that world's session.
+pub const LAUNCH_VALID: Duration = Duration::minutes(3);
 
 pub fn sha_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
@@ -60,9 +62,34 @@ impl Stores {
 
 pub type Publisher = Arc<dyn Fn(&Snapshot) + Send + Sync>;
 
+/// What the engine knows of one shared world that is not in the config. The fields of the world being worked on
+/// live in `Runtime` itself (`world`, `lock_mine`, ...); `select` swaps them with this stash.
+#[derive(Debug, Default, Clone)]
+pub struct WorldRt {
+    pub world: Option<World>,
+    pub lock_mine: bool,
+    last_fetch: Option<DateTime<Utc>>,
+    last_heartbeat: Option<DateTime<Utc>>,
+    watch: Option<Stat>,
+    stable_since: Option<DateTime<Utc>>,
+    dirty: bool,
+    wrote: bool,
+}
+
 /// What the engine knows that is not in the config: the server's view, the game, the watch, a transfer.
 #[derive(Debug, Default, Clone)]
 pub struct Runtime {
+    /// the world `cfg.world` and the per-world fields below are about
+    pub cur: Option<String>,
+    /// the other worlds' per-world fields
+    pub stash: std::collections::BTreeMap<String, WorldRt>,
+    /// the world whose "Jogar" started the game: its lease is taken at game start
+    pub launched: Option<String>,
+    pub launched_at: Option<DateTime<Utc>>,
+    /// the world a transfer under way is for
+    pub transfer_world: Option<String>,
+    /// the slot of this world was written during this game session (its lease is taken then)
+    wrote: bool,
     pub world: Option<World>,
     pub online: bool,
     /// the server answered at least once since the app started
@@ -124,7 +151,117 @@ impl Engine {
         let store = ConfigStore::new(&data_dir);
         let cfg = store.load();
         api.set_token(cfg.token.clone());
-        Engine { api, store, cfg, data_dir, stores, avatar, rt: Runtime { now: Utc::now(), ..Default::default() }, publish: None }
+        let mut e = Engine { api, store, cfg, data_dir, stores, avatar, rt: Runtime { now: Utc::now(), ..Default::default() }, publish: None };
+        if let Some(first) = e.cfg.worlds.first().map(|w| w.world_id.clone()) {
+            let _ = e.select(&first);
+        }
+        e
+    }
+
+    // ------------------------------------------------------------------ several worlds
+
+    /// Writes the world being worked on back into the list.
+    fn flush_cur(&mut self) {
+        if let Some(l) = self.cfg.world.clone() {
+            match self.cfg.worlds.iter_mut().find(|w| w.world_id == l.world_id) {
+                Some(w) => *w = l,
+                None => self.cfg.worlds.push(l),
+            }
+        }
+    }
+
+    fn take_rt(&mut self) -> WorldRt {
+        WorldRt {
+            world: self.rt.world.take(),
+            lock_mine: std::mem::take(&mut self.rt.lock_mine),
+            last_fetch: self.rt.last_fetch.take(),
+            last_heartbeat: self.rt.last_heartbeat.take(),
+            watch: self.rt.watch.take(),
+            stable_since: self.rt.stable_since.take(),
+            dirty: std::mem::take(&mut self.rt.dirty),
+            wrote: std::mem::take(&mut self.rt.wrote),
+        }
+    }
+
+    fn put_rt(&mut self, w: WorldRt) {
+        self.rt.world = w.world;
+        self.rt.lock_mine = w.lock_mine;
+        self.rt.last_fetch = w.last_fetch;
+        self.rt.last_heartbeat = w.last_heartbeat;
+        self.rt.watch = w.watch;
+        self.rt.stable_since = w.stable_since;
+        self.rt.dirty = w.dirty;
+        self.rt.wrote = w.wrote;
+    }
+
+    /// Makes `world_id` the world the engine works on (`cfg.world`, `rt.world`, `rt.lock_mine`...).
+    pub fn select(&mut self, world_id: &str) -> R<()> {
+        if self.rt.cur.as_deref() == Some(world_id) && self.cfg.world.is_some() {
+            return Ok(());
+        }
+        self.flush_cur();
+        let target = self.cfg.worlds.iter().find(|w| w.world_id == world_id).cloned().ok_or("Esse mundo não está neste PC.")?;
+        if let Some(cur) = self.rt.cur.take() {
+            let stashed = self.take_rt();
+            self.rt.stash.insert(cur, stashed);
+        }
+        let next = self.rt.stash.remove(world_id).unwrap_or_default();
+        self.put_rt(next);
+        self.cfg.world = Some(target);
+        self.rt.cur = Some(world_id.to_string());
+        Ok(())
+    }
+
+    /// Every shared world's id, in the order they were added.
+    pub fn world_ids(&mut self) -> Vec<String> {
+        self.flush_cur();
+        self.cfg.worlds.iter().map(|w| w.world_id.clone()).collect()
+    }
+
+    /// A new shared world: added to the list and made the one worked on.
+    fn add_world(&mut self, link: WorldLink, world: Option<World>) {
+        let id = link.world_id.clone();
+        self.flush_cur();
+        if !self.cfg.worlds.iter().any(|w| w.world_id == id) {
+            self.cfg.worlds.push(link);
+        }
+        let _ = self.select(&id);
+        if world.is_some() {
+            self.rt.world = world;
+        }
+        self.save();
+    }
+
+    /// The slots of the shared worlds of a store (so a new world never takes one of them).
+    pub fn taken_slots(&mut self, kind: StoreKind) -> Vec<u8> {
+        self.flush_cur();
+        self.cfg.worlds.iter().filter(|w| w.store == kind).map(|w| w.slot).collect()
+    }
+
+    /// Runs `f` on every shared world in turn, and comes back to the one that was selected.
+    pub fn each_world(&mut self, mut f: impl FnMut(&mut Engine)) {
+        let back = self.rt.cur.clone();
+        for id in self.world_ids() {
+            if self.select(&id).is_ok() {
+                f(self);
+            }
+        }
+        if let Some(b) = back {
+            let _ = self.select(&b);
+        }
+    }
+
+    /// Forgets every world (another player logged in on this PC).
+    fn clear_worlds(&mut self) {
+        self.cfg.world = None;
+        self.cfg.worlds.clear();
+        self.rt.cur = None;
+        self.rt.stash.clear();
+        let _ = self.take_rt();
+    }
+
+    fn release_all(&mut self) {
+        self.each_world(|e| e.release());
     }
 
     pub fn set_publisher(&mut self, publish: Publisher) {
@@ -132,6 +269,7 @@ impl Engine {
     }
 
     pub fn save(&mut self) {
+        self.flush_cur();
         if let Err(e) = self.store.save(&self.cfg) {
             self.rt.error = Some(format!("Não deu para gravar a configuração do app: {e}"));
         }
@@ -212,9 +350,8 @@ impl Engine {
 
     fn accept_login(&mut self, done: LoginDone) {
         if self.cfg.player.as_ref().is_some_and(|p| p.steam_id != done.player.steam_id) {
-            // another player on this PC: the world mapping was the other one's
-            self.cfg.world = None;
-            self.rt.world = None;
+            // another player on this PC: the worlds were the other one's
+            self.clear_worlds();
         }
         self.api.set_token(Some(done.token.clone()));
         self.cfg.token = Some(done.token);
@@ -236,7 +373,7 @@ impl Engine {
     /// world's mapping stays, so logging in again picks it up.
     pub fn logout(&mut self) {
         if self.cfg.token.is_some() {
-            self.release();
+            self.release_all();
             let _ = self.call(|a| a.logout());
         }
         self.api.set_token(None);
@@ -282,6 +419,9 @@ impl Engine {
             self.cfg.token = None;
             self.api.set_token(None);
             self.rt.lock_mine = false;
+            for w in self.rt.stash.values_mut() {
+                w.lock_mine = false;
+            }
             self.rt.login_error = Some("Este PC saiu da conta. Entre com a Steam de novo.".into());
             self.save();
         }
@@ -423,7 +563,7 @@ impl Engine {
             server_diverged: self.rt.world.as_ref().is_some_and(|w| w.diverged) || self.cfg.world.as_ref().is_some_and(|l| l.branch.is_some()),
             behind: self.behind(),
             local_changed,
-            transfer: self.rt.transfer,
+            transfer: if self.rt.transfer_world == self.rt.cur { self.rt.transfer } else { Transfer::Idle },
         }
     }
 
@@ -445,11 +585,13 @@ impl Engine {
     /// Runs `f` with a progress callback that publishes the snapshot with the transfer's bytes.
     fn with_transfer<T>(&mut self, start: Transfer, f: impl FnOnce(&dyn Api, &mut dyn FnMut(u64, u64)) -> T) -> T {
         self.rt.transfer = start;
+        self.rt.transfer_world = self.rt.cur.clone();
         let base = if self.publish.is_some() { Some(self.snapshot()) } else { None };
         if let (Some(p), Some(s)) = (&self.publish, &base) {
             p(s);
         }
         let publish = self.publish.clone();
+        let wid = self.rt.cur.clone();
         let is_up = matches!(start, Transfer::Up { .. });
         let mut last_pct = 255u8;
         let mut progress = |done: u64, total: u64| {
@@ -460,12 +602,13 @@ impl Engine {
             last_pct = pct;
             if let (Some(p), Some(s)) = (&publish, &base) {
                 let mut s = s.clone();
-                view::patch_progress(&mut s, if is_up { Transfer::Up { done, total } } else { Transfer::Down { done, total } });
+                view::patch_progress(&mut s, wid.as_deref(), if is_up { Transfer::Up { done, total } } else { Transfer::Down { done, total } });
                 p(&s);
             }
         };
         let out = f(self.api.as_ref(), &mut progress);
         self.rt.transfer = Transfer::Idle;
+        self.rt.transfer_world = None;
         out
     }
 
@@ -484,29 +627,38 @@ impl Engine {
             return;
         }
         self.check_nick();
-        if self.cfg.world.is_none() {
-            if Self::due(self.rt.last_presence, now, FETCH_PRESENCE) {
-                self.fetch_presence();
-                self.send_avatar();
-            }
-            return;
-        }
-        let every = if game_running { Duration::seconds(15) } else { FETCH_IDLE };
-        if Self::due(self.rt.last_fetch, now, every) {
-            self.fetch();
-        }
         if Self::due(self.rt.last_presence, now, FETCH_PRESENCE) {
             self.fetch_presence();
             self.send_avatar();
         }
+        let starting = game_running && (!was || first);
+        // a "Jogar" counts only for the game it started: one from long before (Steam did not start the game, or it
+        // was closed at the menu) says nothing about the world opened now
+        if starting && self.rt.launched_at.is_none_or(|t| now - t > LAUNCH_VALID) {
+            self.rt.launched = None;
+            self.rt.launched_at = None;
+        }
+        let ending = !game_running && was;
+        self.each_world(|e| e.tick_world(starting, ending));
+        if ending {
+            self.rt.launched = None;
+        }
+    }
 
-        if game_running && (!was || first) {
+    /// One shared world's part of the tick (it is the selected one).
+    fn tick_world(&mut self, starting: bool, ending: bool) {
+        let now = self.rt.now;
+        let game_running = self.rt.game_running;
+        let every = if game_running { Duration::seconds(15) } else { FETCH_IDLE };
+        if Self::due(self.rt.last_fetch, now, every) {
+            self.fetch();
+        }
+        if starting {
             self.start_session();
         }
-        if !game_running && was {
+        if ending {
             self.end_session();
         }
-
         if game_running {
             self.while_running();
         } else {
@@ -522,15 +674,22 @@ impl Engine {
         let now = self.rt.now;
         let Ok((link, store)) = self.link_store() else { return };
         if link.session.is_none() {
+            // to the millisecond, as the server keeps it: the session's uploads all carry this very start
+            let started = DateTime::<Utc>::from_timestamp_millis(now.timestamp_millis()).unwrap_or(now);
             if let Some(l) = self.cfg.world.as_mut() {
-                l.session = Some(Session { started_at: now, last_autosave_at: None });
+                l.session = Some(Session { started_at: started, last_autosave_at: None });
             }
             self.save();
         }
         self.rt.watch = store.stat(link.slot);
         self.rt.stable_since = None;
         self.rt.dirty = false;
-        self.try_lock();
+        self.rt.wrote = false;
+        // the game does not say which world it opens: the lease is taken now only for the world its "Jogar"
+        // started; the others take theirs on the first write of their slot (while_running)
+        if self.rt.launched.is_some() && self.rt.launched == self.rt.cur {
+            self.try_lock();
+        }
     }
 
     /// Takes the lease when it is free and this PC is not behind (playing an old copy as host would lose the
@@ -593,9 +752,11 @@ impl Engine {
                     Err(_) => {}
                 }
             }
-        } else if self.rt.online && self.holder() != Holder::Other {
-            // free, or the server still names this PC (the app restarted with the game open): the lock POST of the
-            // holder renews it
+        } else if self.rt.online
+            && (self.holder() == Holder::Me || (self.holder() == Holder::None && (self.rt.wrote || (self.rt.launched.is_some() && self.rt.launched == self.rt.cur))))
+        {
+            // the server still names this PC (the app restarted with the game open: the holder's lock POST renews
+            // it), or this world is the one being played (launched by its Jogar, or its slot was written)
             self.try_lock();
         }
         // a session that waited in the queue goes first, so this session's uploads chain from it
@@ -607,6 +768,13 @@ impl Engine {
         if stat != self.rt.watch {
             self.rt.watch = stat;
             self.rt.stable_since = Some(now);
+            if !self.rt.wrote {
+                // the first write of this slot in the session: this is the world being played, take its lease
+                self.rt.wrote = true;
+                if !self.rt.lock_mine && self.rt.online && self.holder() == Holder::None {
+                    self.try_lock();
+                }
+            }
         }
         if self.rt.stable_since.is_some_and(|t| now - t >= STABLE) {
             self.rt.stable_since = None;
@@ -731,7 +899,7 @@ impl Engine {
     fn upload_current(&mut self, ended: Option<DateTime<Utc>>) -> R<()> {
         let (link, store) = self.link_store()?;
         let bytes = store.read(link.slot).map_err(|e| format!("Não deu para ler o mundo: {e}"))?;
-        let started = link.session.as_ref().map(|s| s.started_at).unwrap_or(self.rt.now);
+        let started = link.session.as_ref().map(|s| s.started_at).unwrap_or_else(|| DateTime::<Utc>::from_timestamp_millis(self.rt.now.timestamp_millis()).unwrap_or(self.rt.now));
         let headers = UploadHeaders { parent: link.base.clone(), sha256: sha_hex(&bytes), started_at: started, ended_at: ended };
         self.send(&bytes, &headers).map_err(|e| api_text(&e))?;
         if let Some(stat) = store.stat(link.slot) {
@@ -819,7 +987,10 @@ impl Engine {
     // ------------------------------------------------------------------ the window's actions
 
     /// "Jogar": pulls first when behind (and nothing would be lost), then the URL that starts the game.
-    pub fn play(&mut self) -> R<&'static str> {
+    pub fn play(&mut self, world_id: Option<&str>) -> R<&'static str> {
+        if let Some(id) = world_id {
+            self.select(id)?;
+        }
         if self.rt.game_running {
             return Err("O Enshrouded já está aberto.".into());
         }
@@ -832,6 +1003,8 @@ impl Engine {
                 let head = self.rt.world.as_ref().and_then(|w| w.head.clone()).unwrap();
                 self.pull(&head)?;
             }
+            self.rt.launched = self.rt.cur.clone();
+            self.rt.launched_at = Some(self.rt.now);
         }
         Ok(STEAM_PLAY)
     }
@@ -847,7 +1020,10 @@ impl Engine {
     }
 
     /// "Seguir com a sua" (`keep_mine`) or "Seguir com a do <amigo>". The other version stays in the history.
-    pub fn resolve(&mut self, keep_mine: bool) -> R<()> {
+    pub fn resolve(&mut self, world_id: Option<&str>, keep_mine: bool) -> R<()> {
+        if let Some(id) = world_id {
+            self.select(id)?;
+        }
         if self.rt.game_running {
             return Err("Feche o Enshrouded antes de escolher.".into());
         }
@@ -903,6 +1079,9 @@ impl Engine {
             return Err("Feche o Enshrouded para copiar o mundo.".into());
         }
         self.ensure_device()?;
+        if self.taken_slots(from).contains(&slot) {
+            return Err("Esse mundo já está compartilhado.".into());
+        }
         let src = self.stores.get(from).ok_or("A pasta desse mundo não foi achada.")?;
         let dst = self.stores.get(into).ok_or("A pasta de saves escolhida não foi achada.")?;
         let bytes = src.read(slot).map_err(|e| format!("Não deu para ler o mundo: {e}"))?;
@@ -910,14 +1089,14 @@ impl Engine {
         let slot = if from == into {
             slot
         } else {
-            let free = dst.free_slot(&[]).ok_or("Não há espaço livre de save (world0 a world9 estão ocupados).")?;
+            let taken = self.taken_slots(into);
+            let free = dst.free_slot(&taken).ok_or("Não há espaço livre de save (world0 a world9 estão ocupados).")?;
             dst.write(free, &bytes).map_err(|e| format!("Não deu para copiar o mundo: {e}"))?;
             free
         };
         let world = self.call(|a| a.create_world(name)).map_err(|e| api_text(&e))?;
-        self.cfg.world = Some(WorldLink { world_id: world.world_id.clone(), name: world.name.clone(), store: into, slot, base: None, base_sha256: None, base_stat: None, pending: None, branch: None, session: None });
-        self.rt.world = Some(world);
-        self.save();
+        let link = WorldLink { world_id: world.world_id.clone(), name: world.name.clone(), store: into, slot, base: None, base_sha256: None, base_stat: None, pending: None, branch: None, session: None };
+        self.add_world(link, Some(world));
         let headers = UploadHeaders { parent: None, sha256: sha_hex(&bytes), started_at: at, ended_at: Some(at) };
         if let Err(e) = self.send(&bytes, &headers) {
             // the world exists: its first version goes up from the queue when the server answers again
@@ -930,10 +1109,13 @@ impl Engine {
             l.base_stat = dst.stat(slot);
         }
         self.save();
-        self.new_invite()
+        self.new_invite(None)
     }
 
-    pub fn new_invite(&mut self) -> R<Invite> {
+    pub fn new_invite(&mut self, world_id: Option<&str>) -> R<Invite> {
+        if let Some(id) = world_id {
+            self.select(id)?;
+        }
         let id = self.cfg.world.as_ref().map(|w| w.world_id.clone()).ok_or("Nenhum mundo compartilhado neste PC.")?;
         self.call(|a| a.create_invite(&id)).map_err(|e| api_text(&e))
     }
@@ -950,10 +1132,15 @@ impl Engine {
         self.ensure_device()?;
         let store = self.stores.get(into).ok_or("A pasta de saves escolhida não foi achada.")?;
         let world = self.call(|a| a.redeem(&code)).map_err(|e| api_text(&e))?;
-        let slot = store.free_slot(&[]).ok_or("Não há espaço livre de save (world0 a world9 estão ocupados).")?;
-        self.cfg.world = Some(WorldLink { world_id: world.world_id.clone(), name: world.name.clone(), store: into, slot, base: None, base_sha256: None, base_stat: None, pending: None, branch: None, session: None });
-        self.rt.world = Some(world.clone());
-        self.save();
+        if self.world_ids().contains(&world.world_id) {
+            // already one of this PC's worlds (the server gives it back and keeps the code)
+            self.select(&world.world_id)?;
+            return Ok(world);
+        }
+        let taken = self.taken_slots(into);
+        let slot = store.free_slot(&taken).ok_or("Não há espaço livre de save (world0 a world9 estão ocupados).")?;
+        let link = WorldLink { world_id: world.world_id.clone(), name: world.name.clone(), store: into, slot, base: None, base_sha256: None, base_stat: None, pending: None, branch: None, session: None };
+        self.add_world(link, Some(world.clone()));
         if let Some(head) = world.head.clone() {
             self.pull(&head)?;
         }
@@ -961,19 +1148,26 @@ impl Engine {
     }
 
     /// Where the redeemed world would go (the free slot), for the paste step.
-    pub fn free_slot(&self, into: StoreKind) -> Option<u8> {
-        self.stores.get(into)?.free_slot(&[])
+    pub fn free_slot(&mut self, into: StoreKind) -> Option<u8> {
+        let taken = self.taken_slots(into);
+        self.stores.get(into)?.free_slot(&taken)
     }
 
     /// Forces a server refresh on the next tick (after the window asks for it).
     pub fn refresh(&mut self) {
         self.rt.last_fetch = None;
         self.rt.last_presence = None;
+        for w in self.rt.stash.values_mut() {
+            w.last_fetch = None;
+        }
     }
 
     /// The world's setting "Steam" / "Local": the file is copied into a free slot of the other store (the old file
     /// stays where it was, untouched) and the world lives there from then on. Only with the game closed.
-    pub fn move_store(&mut self, into: StoreKind) -> R<()> {
+    pub fn move_store(&mut self, world_id: Option<&str>, into: StoreKind) -> R<()> {
+        if let Some(id) = world_id {
+            self.select(id)?;
+        }
         let (link, from) = self.link_store()?;
         if link.store == into {
             return Ok(());
@@ -982,7 +1176,8 @@ impl Engine {
             return Err("Feche o Enshrouded para mudar onde o mundo fica.".into());
         }
         let to = self.stores.get(into).ok_or("A pasta de saves escolhida não foi achada.")?;
-        let slot = to.free_slot(&[]).ok_or("Não há espaço livre de save (world0 a world9 estão ocupados).")?;
+        let taken = self.taken_slots(into);
+        let slot = to.free_slot(&taken).ok_or("Não há espaço livre de save (world0 a world9 estão ocupados).")?;
         if let Ok(bytes) = from.read(link.slot) {
             to.write(slot, &bytes).map_err(|e| format!("Não deu para copiar o mundo: {e}"))?;
         }
@@ -997,15 +1192,21 @@ impl Engine {
 
     /// Gives the lease back now (the app is quitting with the game closed).
     pub fn forget_lock(&mut self) {
-        self.release();
+        self.release_all();
     }
 
     /// Stops sharing on this PC: forgets the world (the save file and the server's copy stay).
     pub fn forget_world(&mut self) {
         self.release();
+        if let Some(id) = self.rt.cur.take() {
+            self.cfg.worlds.retain(|w| w.world_id != id);
+        }
         self.cfg.world = None;
-        self.rt.world = None;
+        let _ = self.take_rt();
         self.save();
+        if let Some(first) = self.cfg.worlds.first().map(|w| w.world_id.clone()) {
+            let _ = self.select(&first);
+        }
     }
 }
 
