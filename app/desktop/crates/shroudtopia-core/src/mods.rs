@@ -88,6 +88,14 @@ pub const CATALOG: &[KnownMod] = &[
         options: &[],
         eml: Some("max-stack"),
     },
+    KnownMod {
+        key: "twitch-drops",
+        dll: "twitch-drops/mod.json",
+        name: "Drops da Twitch",
+        sub: "Quem tem um drop resgata todos; usam sem vincular a Twitch",
+        options: &[],
+        eml: Some("twitch-drops"),
+    },
 ];
 
 /// `enabled=` of an EML mod's config.txt; no file (or no line) is on, as the mod reads it.

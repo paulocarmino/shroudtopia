@@ -1,13 +1,13 @@
 """Packs the mods zips release.sh signs (signature.rs explains the two layouts):
 
   v1  shroudtopia-mods.zip     shroudtopia.dll + winmm.dll + mods/<name>.dll: what apps up to 0.1.5 accept, nothing more
-  v2  shroudtopia-mods-v2.zip  v1 + EML's dbghelp.dll (eml-mods/eml.lock) + mods/minimap_mod/ + mods/max-stack/
+  v2  shroudtopia-mods-v2.zip  v1 + EML's dbghelp.dll (eml-mods/eml.lock) + mods/minimap_mod/ + mods/max-stack/ + mods/twitch-drops/
 
     python scripts/mods_zip.py --dlls <folder> [--v1 <zip>] [--v2 <zip>] [--install <game folder>]
 
 <folder> is MSBuild's output (build.bat: build/x64): the loader, the mods' DLLs at its top or under mods/, and
 minimap_mod.dll at its top, under mods/ or under mods/minimap_mod/. The minimap's data comes from the submodule
-(third-party/Enshrouded-minimap/assets), Max Stack from eml-mods/max-stack. EML is downloaded once into
+(third-party/Enshrouded-minimap/assets), Max Stack and Twitch Drops from eml-mods/. EML is downloaded once into
 ~/.shroudtopia/cache and used only if its size and sha256 are the ones eml.lock names.
 
 --install unpacks the v2 zip into a game folder, for trying a build in the game before any release: the files it
@@ -30,7 +30,7 @@ MINIMAP_ASSETS = os.path.join(REPO, "third-party", "Enshrouded-minimap", "assets
 EML_MODS = os.path.join(REPO, "eml-mods")
 EML_LOCK = os.path.join(EML_MODS, "eml.lock")
 # the Lua mods under eml-mods/ that ship
-EML_MOD_FOLDERS = ["max-stack"]
+EML_MOD_FOLDERS = ["max-stack", "twitch-drops"]
 
 
 def stop(msg):
