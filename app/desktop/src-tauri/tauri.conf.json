@@ -15,8 +15,8 @@
       {
         "label": "main",
         "title": "Shroudtopia",
-        "width": 720,
-        "height": 580,
+        "width": 1130,
+        "height": 620,
         "minWidth": 640,
         "minHeight": 480,
         "resizable": true,

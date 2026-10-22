@@ -8,8 +8,9 @@ local MAX_STACK_SIZE = 999
 local STACK_MULTIPLIER = 5.0
 
 local function enabled()
-    local content = io.read_to_string("config.txt")
-    if not content then return true end
+    -- EML raises an error for a missing file rather than returning nil
+    local ok, content = pcall(io.read_to_string, "config.txt")
+    if not ok or not content then return true end
     local value = string.match(content, "enabled%s*=%s*(%a+)")
     return value == nil or string.lower(value) ~= "false"
 end

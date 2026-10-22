@@ -95,20 +95,23 @@ public:
 			}
 		}
 		LOG_CLASS(std::string(" found ").append(std::to_string(patches.size())).append(" stamina spend sites").c_str());
+		hookScriptCosts(image, size);
 	}
 
 	~NoStaminaLoss()
 	{
 		for (auto p : patches) { p->undo(); delete p; }
+		if (scriptCosts) scriptCosts->deactivate();
 	}
 
 	void activate()
 	{
-		if (patches.empty()) {
+		if (patches.empty() && !scriptCosts) {
 			LOG_CLASS(" no stamina spend sites found, not activated");
 			return;
 		}
 		for (auto p : patches) p->apply();
+		if (scriptCosts) scriptCosts->activate();
 		active = true;
 		LOG_CLASS("Activated");
 	}
@@ -116,8 +119,54 @@ public:
 	void deactivate()
 	{
 		for (auto p : patches) p->undo();
+		if (scriptCosts) scriptCosts->deactivate();
 		active = false;
 		LOG_CLASS("Deactivated");
+	}
+
+private:
+	Mem::Detour* scriptCosts = nullptr;
+
+	// Costs that game data defines (mining, tools, abilities) are paid by the impact script node ChangeAttribute,
+	// not by the sites above: it reads the attribute (r13d), applies the operation, reads the result (r14d) and
+	// writes it through a generic attribute setter, with the attribute hash in ebx. The call to that setter goes
+	// through a cave that skips the write when the attribute is stamina and the result is lower, and leaves through
+	// the node's own success exit (the one that also skips its "resource changed" event). Raises still go through.
+	void hookScriptCosts(const uint8_t* image, size_t size)
+	{
+		// mov r9,r15; mov [rsp+20],r12; mov r8d,edi; lea rcx,[rbp-40]; mov edx,ebx; mov r14d,eax; call setter;
+		// cmp byte [rbp-40],0; jne; cmp ebx,health; je; cmp ebx,stamina; je; cmp ebx,mana; jne success
+		const char* pattern =
+			"\x4D\x8B\xCF\x4C\x89\x64\x24\x20\x44\x8B\xC7\x48\x8D\x4D\xC0\x8B\xD3\x44\x8B\xF0\xE8\x00\x00\x00\x00"
+			"\x80\x7D\xC0\x00\x75\x00\x81\xFB\x95\x49\xB8\x8E\x74\x00\x81\xFB\x8B\xAA\xB6\x04\x74\x00"
+			"\x81\xFB\x4E\x57\xA2\x6A\x75\x00";
+		const char* mask = "xxxxxxxxxxxxxxxxxxxxx????xxxxx?xxxxxxx?xxxxxxx?xxxxxxx?";
+		uintptr_t match = Mem::FindPattern(pattern, mask, (uintptr_t)image, size);
+		if (!match) {
+			LOG_CLASS(" ChangeAttribute pattern not found, script costs still drain stamina");
+			return;
+		}
+		const uintptr_t callSite = match + 20;
+		const uintptr_t setter = callSite + 5 + *reinterpret_cast<const int32_t*>(callSite + 1);
+		const uintptr_t success = match + 0x37 + *reinterpret_cast<const int8_t*>(match + 0x36);
+
+		uint8_t cave[] = {
+			0x81, 0xFB, 0x8B, 0xAA, 0xB6, 0x04,       // 0  cmp ebx, StaminaHash
+			0x75, 0x05,                               // 6  jne call
+			0x45, 0x39, 0xEE,                         // 8  cmp r14d, r13d
+			0x7C, 0x15,                               // 11 jl skip (34)
+			0xFF, 0x15, 0x02, 0x00, 0x00, 0x00,       // 13 call [rip+2] (the setter)
+			0xEB, 0x08,                               // 19 jmp over the address
+			0, 0, 0, 0, 0, 0, 0, 0,                   // 21 setter address
+			0xE9, 0, 0, 0, 0,                         // 29 jmp back after the call
+			0xE9, 0, 0, 0, 0,                         // 34 skip: jmp to the node's success exit
+		};
+		scriptCosts = new Mem::Detour(callSite, cave, sizeof(cave), false, 0);
+		const uintptr_t at = (uintptr_t)scriptCosts->shellcode->data->address;
+		scriptCosts->shellcode->updateValue<uint64_t>(21, setter);
+		scriptCosts->shellcode->updateValue<int32_t>(30, (int32_t)(callSite + 5 - (at + 34)));
+		scriptCosts->shellcode->updateValue<int32_t>(35, (int32_t)(success - (at + 39)));
+		LOG_CLASS(" hooked ChangeAttribute for script stamina costs");
 	}
 };
 

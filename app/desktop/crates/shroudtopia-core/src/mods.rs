@@ -221,7 +221,10 @@ pub fn view(path: &Path, mods_dir: Option<&Path>) -> Result<Vec<ModView>, ModsEr
         if entry.is_none() && !installed {
             continue;
         }
-        out.push(mod_view(k.key, entry.unwrap_or(&empty), Some(k)));
+        // what the file does not say, the mod's own defaults do (as the loader and the mod read it)
+        let mut merged = mods_dir.map(|d| manifest_defaults(d, k)).unwrap_or_default();
+        merged.extend(entry.unwrap_or(&empty).iter().map(|(k, v)| (k.clone(), v.clone())));
+        out.push(mod_view(k.key, &merged, Some(k)));
     }
     for (key, entry) in mods {
         if known(key).is_none() {
@@ -229,6 +232,20 @@ pub fn view(path: &Path, mods_dir: Option<&Path>) -> Result<Vec<ModView>, ModsEr
         }
     }
     Ok(out)
+}
+
+/// `shroudtopia.default` of the mod.json beside a folder mod's DLL (`minimap_mod/mod.json`): the values the loader
+/// writes the first time it loads the mod, and only when shroudtopia.json has no entry for it yet.
+fn manifest_defaults(mods_dir: &Path, k: &KnownMod) -> Map<String, Value> {
+    let Some((folder, _)) = k.dll.split_once('/') else { return Map::new() };
+    let text = fs::read_to_string(mods_dir.join(folder).join("mod.json")).unwrap_or_default();
+    match serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')) {
+        Ok(Value::Object(mut m)) => match m.remove("shroudtopia").and_then(|mut s| s.get_mut("default").map(Value::take)) {
+            Some(Value::Object(d)) => d,
+            _ => Map::new(),
+        },
+        _ => Map::new(),
+    }
 }
 
 fn mod_view(key: &str, entry: &Map<String, Value>, known: Option<&KnownMod>) -> ModView {
@@ -287,7 +304,15 @@ pub fn set(path: &Path, mod_key: &str, opt_key: &str, value: Value) -> Result<()
     if !entry.is_object() {
         *entry = json!({});
     }
-    entry.as_object_mut().unwrap().insert(opt_key.to_string(), value);
+    let entry = entry.as_object_mut().unwrap();
+    // A toggle made before the loader wrote the mod's defaults creates its entry, and the loader then never writes
+    // them: fill in every default the entry lacks, so the file says what the window showed.
+    if let (Some(k), Some(game)) = (known(mod_key), path.parent()) {
+        for (dk, dv) in manifest_defaults(&game.join("mods"), k) {
+            entry.entry(dk).or_insert(dv);
+        }
+    }
+    entry.insert(opt_key.to_string(), value);
     write(path, &root)
 }
 
@@ -378,6 +403,26 @@ mod tests {
         fs::write(&path, "{ not json").unwrap();
         assert!(matches!(view(&path, None), Err(ModsError::Invalid(_))));
         assert!(matches!(set(&path, "basics", "active", json!(true)), Err(ModsError::Invalid(_))), "a broken file is not overwritten");
+    }
+
+    #[test]
+    fn a_folder_mod_shows_and_writes_its_manifest_defaults() {
+        let (dir, path) = copy();
+        let mods_dir = dir.path().join("mods");
+        fs::create_dir_all(mods_dir.join("minimap_mod")).unwrap();
+        fs::write(mods_dir.join("minimap_mod/minimap_mod.dll"), b"MZ").unwrap();
+        fs::write(mods_dir.join("minimap_mod/mod.json"), r#"{"id":"minimap_mod","shroudtopia":{"default":{"active":true,"show_clock":true,"show_weather":true,"position":"bottom-right","scale_percent":100}}}"#).unwrap();
+        let minimap = |p: &Path| view(p, Some(&mods_dir)).unwrap().into_iter().find(|m| m.key == "minimap_mod").unwrap();
+        let m = minimap(&path);
+        assert!(m.active, "not in the file yet: the manifest's active");
+        let value = |m: &ModView, key: &str| m.options.iter().find(|o| o.key == key).unwrap().value.clone();
+        assert_eq!(value(&m, "show_clock"), OptValue::Bool { value: true });
+        assert_eq!(value(&m, "position"), OptValue::Other { text: "\"bottom-right\"".into() });
+        // the first toggle writes the defaults with it; the file's own values win over them afterwards
+        set(&path, "minimap_mod", "show_weather", json!(false)).unwrap();
+        let root: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(root["mods"]["minimap_mod"], json!({"active":true,"show_clock":true,"show_weather":false,"position":"bottom-right","scale_percent":100}));
+        assert_eq!(value(&minimap(&path), "show_weather"), OptValue::Bool { value: false });
     }
 
     #[test]
