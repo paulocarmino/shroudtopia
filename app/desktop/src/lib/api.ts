@@ -15,6 +15,8 @@ export interface WorldView {
   id: string; name: string; with: string; state: string; tone: Tone; status: string; line: string;
   action: Action | null; progress: Progress | null; note: { text: string; icon: string } | null;
   choices: { mine: Choice; theirs: Choice } | null; history: HistRow[]; file: string; store: "steam" | "local"; members: number;
+  /** ISO time the world last changed on the server */
+  updatedAt: string | null;
 }
 export interface Person { nick: string; initial: string; me: boolean; sub: string; dot: string }
 export interface Snapshot {
@@ -37,7 +39,7 @@ export interface UiState {
 }
 export interface SlotRow { store: "steam" | "local"; index: number; file: string; title: string; sub: string; shared?: boolean }
 export interface Slots { slots: SlotRow[]; freeSteam: string | null; freeLocal: string | null; steam: boolean; local: boolean }
-export interface Invite { code: string; expiresAt: string }
+export interface Invite { code: string; expiresAt: string; worldId?: string | null }
 
 export const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -51,8 +53,8 @@ function mockCall(cmd: string, args?: Record<string, unknown>): unknown {
   mock ??= mockState();
   if (cmd === "get_state") return mock;
   if (cmd === "list_slots") return mockSlots();
-  if (cmd === "share" || cmd === "new_invite") return { code: "ENSH-7KQ2", expiresAt: new Date(Date.now() + 864e5).toISOString() };
-  if (cmd === "redeem") return { name: "Mundo do bang", sub: "de rodrigao_br · 1,8 MB · foi para o espaço world2.ksd", initial: "R" };
+  if (cmd === "share" || cmd === "new_invite") return { code: "ENSH-7KQ2", expiresAt: new Date(Date.now() + 864e5).toISOString(), worldId: (args?.world as string) ?? "w1" };
+  if (cmd === "redeem") return { worldId: "w2", name: "Mundo do bang", sub: "de rodrigao_br · 1,8 MB · foi para o espaço world2.ksd", initial: "R" };
   if (cmd === "set_mod" && args) {
     const m = mock.mods.items.find((x) => x.key === args.modKey);
     if (m && args.key === "active") m.active = args.value as boolean;
@@ -74,7 +76,7 @@ export const api = {
   slots: () => call<Slots>("list_slots"),
   share: (store: string, slot: number, into: string, name: string) => call<Invite>("share", { store, slot, into, name }),
   newInvite: (world?: string) => call<Invite>("new_invite", { world }),
-  redeem: (code: string, into: string) => call<{ name: string; sub: string; initial: string }>("redeem", { code, into }),
+  redeem: (code: string, into: string) => call<{ worldId: string; name: string; sub: string; initial: string }>("redeem", { code, into }),
   setMod: (modKey: string, key: string, value: unknown) => call<void>("set_mod", { modKey, key, value }),
   updateCheck: () => call<void>("update_check"),
   updateApply: () => call<void>("update_apply"),

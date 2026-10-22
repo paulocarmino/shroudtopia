@@ -188,7 +188,15 @@ fn slots(shared: &Shared) -> Value {
 
 #[tauri::command]
 pub async fn share(app: AppHandle, store: StoreKind, slot: u8, into: StoreKind, name: String) -> R {
-    blocking(move || app.state::<Shared>().engine(move |e| e.share(store, slot, into, &name))).await
+    blocking(move || {
+        app.state::<Shared>().engine(move |e| {
+            let inv = e.share(store, slot, into, &name)?;
+            // the page opens the code on the new world's card
+            let id = e.cfg.world.as_ref().map(|w| w.world_id.clone());
+            Ok(json!({ "code": inv.code, "expiresAt": inv.expires_at, "worldId": id }))
+        })
+    })
+    .await
 }
 
 #[tauri::command]
@@ -205,7 +213,7 @@ pub async fn redeem(app: AppHandle, code: String, into: StoreKind) -> R {
             let from = w.members.iter().find(|m| m.steam_id != me).map(|m| m.nick.clone()).unwrap_or_default();
             let size = w.head.as_ref().map(|h| format::size(h.size)).unwrap_or_else(|| "—".into());
             let file = e.cfg.world.as_ref().map(|l| steam::slot_file(l.slot)).unwrap_or_default();
-            Ok(json!({ "name": w.name, "sub": format!("de {from} · {size} · foi para o espaço {file}"), "initial": format::initial(&from) }))
+            Ok(json!({ "worldId": w.world_id, "name": w.name, "sub": format!("de {from} · {size} · foi para o espaço {file}"), "initial": format::initial(&from) }))
         })
     })
     .await

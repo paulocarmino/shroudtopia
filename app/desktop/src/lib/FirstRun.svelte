@@ -1,28 +1,27 @@
 <script lang="ts">
-  // First run: "Entrar com a Steam" (Steam OpenID, CONTRACT.md), then the prototype's pairing flow: choose, which
-  // world (and where it lives: Steam or Local), the code to send, or the code pasted.
+  // First run: "Entrar com a Steam" (Steam OpenID, CONTRACT.md), then the prototype's pairing flow: choose, then
+  // which world (and where it lives: Steam or Local) or the code pasted. Both end on the cards: a shared world's
+  // code opens on its card, a redeemed world is just there.
   import { ICON } from "./icons";
   import { api, type UiState, type Slots, type SlotRow } from "./api";
   import Status from "./Status.svelte";
   import Note from "./Note.svelte";
   import { onMount } from "svelte";
 
-  let { s, start = "choose", invite = null, inviteFor = null, embedded = false, ondone }: { s: UiState; start?: string; invite?: string | null; inviteFor?: string | null; embedded?: boolean; ondone: () => void } = $props();
+  let { s, start = "choose", embedded = false, ondone, onshared, onredeemed }: {
+    s: UiState; start?: string; embedded?: boolean; ondone: () => void;
+    onshared: (world: string | null, code: string) => Promise<void>; onredeemed: (world: string, text: string) => Promise<void>;
+  } = $props();
 
   const sync = $derived(s.sync);
   const login = $derived(sync?.phase === "login");
   let step = $state(start);
-  let code = $state<string | null>(invite);
   let slots = $state<Slots | null>(null);
   let pick = $state<SlotRow | null>(null);
   let into = $state<"steam" | "local">("steam");
   let pasted = $state("");
-  let redeemed = $state<{ name: string; sub: string; initial: string } | null>(null);
   let busy = $state(false);
   let error = $state<string | null>(null);
-  let copied = $state(false);
-  /** the world the code is for (the one just shared, or the card's "Convidar amigo") */
-  let sharedName = $state<string | null>(inviteFor);
   /** opened from the cards ("Compartilhar outro mundo", "Tenho um código"): Voltar goes back to them */
   const fromCards = start === "slot" || start === "paste";
   onMount(() => {
@@ -30,10 +29,7 @@
     else if (start === "paste") toPaste();
   });
 
-  const stepIdx = $derived(({ choose: 0, slot: 1, code: 2, paste: 1 } as Record<string, number>)[step] ?? 0);
-  const sharedWorld = $derived(sync?.worlds.find((w) => w.name === sharedName) ?? null);
-  const members = $derived(sharedWorld?.members ?? 1);
-  const friend = $derived(sync?.people.find((p) => !p.me) ?? null);
+  const stepIdx = $derived(step === "choose" ? 0 : 1);
 
   async function run(f: () => Promise<void>) {
     busy = true;
@@ -67,24 +63,15 @@
     if (!pick) return;
     await run(async () => {
       // the shared world keeps the name the game shows for it
-      sharedName = pick!.title;
       const inv = await api.share(pick!.store, pick!.index, into, pick!.title);
-      code = inv.code;
-      step = "code";
+      await onshared(inv.worldId ?? null, inv.code);
     });
   }
   async function redeem() {
     await run(async () => {
-      redeemed = await api.redeem(pasted, into);
+      const r = await api.redeem(pasted, into);
+      await onredeemed(r.worldId, `${r.name} chegou: ${r.sub}.`);
     });
-  }
-  async function copy() {
-    if (!code) return;
-    try {
-      await navigator.clipboard.writeText(code);
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
-    } catch {}
   }
   const freeSlot = $derived(slots ? (into === "steam" ? slots.freeSteam : slots.freeLocal) : null);
 </script>
@@ -110,7 +97,7 @@
     {/if}
     {#if sync?.login.error}<Note text={sync.login.error} icon="alert" error />{/if}
   {:else if step === "choose"}
-    <div class="steps">{#each [0, 1, 2] as i}<i class:on={i <= stepIdx}></i>{/each}</div>
+    <div class="steps">{#each [0, 1] as i}<i class:on={i <= stepIdx}></i>{/each}</div>
     <h2>Jogar junto com alguém</h2>
     <p class="lead">Quem abrir o jogo primeiro hospeda. Quando fecha, o mundo sobe e fica pronto no PC do outro.</p>
     <div class="pick">
@@ -118,7 +105,7 @@
       <button class="opt-card" disabled={busy} onclick={toPaste}>{@html ICON.link}<span class="t">Tenho um código</span><span class="s">Um amigo já compartilhou o mundo dele com você</span></button>
     </div>
   {:else if step === "slot"}
-    <div class="steps">{#each [0, 1, 2] as i}<i class:on={i <= stepIdx}></i>{/each}</div>
+    <div class="steps">{#each [0, 1] as i}<i class:on={i <= stepIdx}></i>{/each}</div>
     <h2>Qual mundo?</h2>
     <p class="lead">Mundos deste PC, achados nas pastas de saves do jogo (Steam e local).</p>
     {#if slots && slots.slots.length}
@@ -142,37 +129,19 @@
       </div>
     </div>
     <div class="fr-actions"><button class="btn" onclick={() => (fromCards ? ondone() : (step = "choose"))}>Voltar</button><button class="btn primary" disabled={busy || !pick} onclick={share}>Compartilhar</button></div>
-  {:else if step === "code"}
-    <div class="steps">{#each [0, 1, 2] as i}<i class:on={i <= stepIdx}></i>{/each}</div>
-    <h2>Mande este código para seu amigo</h2>
-    <p class="lead">Ele cola no app dele e o {sharedName ?? "mundo"} aparece lá. Vale por 24 horas e para uma pessoa.</p>
-    <div class="card code"><span class="val">{code}</span><button class="btn" onclick={copy}>{@html ICON.copy}{copied ? "Copiado" : "Copiar"}</button></div>
-    <div class="card">
-      {#if members > 1 && friend}
-        <div class="row"><span class="avatar friend">{friend.initial}</span><div class="txt"><div class="name">{friend.nick}</div><div class="sub">Entrou no mundo</div></div><Status tone="ok" text="pronto" /></div>
-      {:else}
-        <div class="row"><span class="avatar friend">?</span><div class="txt"><div class="name">Esperando o amigo</div><div class="sub">Aparece aqui quando ele usar o código</div></div><Status tone="busy" text="aguardando" /></div>
-      {/if}
-    </div>
-    <div class="fr-actions"><button class="btn primary" onclick={ondone}>Pronto</button></div>
   {:else if step === "paste"}
-    <div class="steps">{#each [0, 1, 2] as i}<i class:on={i <= stepIdx}></i>{/each}</div>
+    <div class="steps">{#each [0, 1] as i}<i class:on={i <= stepIdx}></i>{/each}</div>
     <h2>Cole o código</h2>
     <p class="lead">O mundo é baixado para um espaço livre de save neste PC. Nenhum mundo seu é tocado.</p>
-    <div class="field">{@html ICON.link.replace("<svg", '<svg style="width:16px;color:var(--muted)"')}<input bind:value={pasted} aria-label="Código" placeholder="ENSH-XXXX" disabled={!!redeemed} /></div>
-    {#if redeemed}
-      <div class="card"><div class="row"><span class="avatar friend">{redeemed.initial}</span><div class="txt"><div class="name">{redeemed.name}</div><div class="sub">{redeemed.sub}</div></div><Status tone="ok" text="código válido" /></div></div>
-      <div class="fr-actions"><button class="btn primary" onclick={ondone}>Pronto</button></div>
-    {:else}
-      <div class="row" style="padding:0">
-        <div class="txt"><div class="sub">Guardar em {into === "steam" ? "Jogos salvos: Steam" : "jogos salvos locais"}{freeSlot ? ` · vai para o espaço ${freeSlot}` : ""}</div></div>
-        <div class="seg small">
-          <button aria-pressed={into === "steam"} disabled={slots ? !slots.steam : false} onclick={() => (into = "steam")}>Steam</button>
-          <button aria-pressed={into === "local"} disabled={slots ? !slots.local : false} onclick={() => (into = "local")}>Local</button>
-        </div>
+    <div class="field">{@html ICON.link.replace("<svg", '<svg style="width:16px;color:var(--muted)"')}<input bind:value={pasted} aria-label="Código" placeholder="ENSH-XXXX" /></div>
+    <div class="row" style="padding:0">
+      <div class="txt"><div class="sub">Guardar em {into === "steam" ? "Jogos salvos: Steam" : "jogos salvos locais"}{freeSlot ? ` · vai para o espaço ${freeSlot}` : ""}</div></div>
+      <div class="seg small">
+        <button aria-pressed={into === "steam"} disabled={slots ? !slots.steam : false} onclick={() => (into = "steam")}>Steam</button>
+        <button aria-pressed={into === "local"} disabled={slots ? !slots.local : false} onclick={() => (into = "local")}>Local</button>
       </div>
-      <div class="fr-actions"><button class="btn" onclick={() => (fromCards ? ondone() : (step = "choose"))}>Voltar</button><button class="btn primary" disabled={busy || pasted.trim().length < 4} onclick={redeem}>{@html ICON.download}{busy ? "Baixando…" : "Baixar e entrar"}</button></div>
-    {/if}
+    </div>
+    <div class="fr-actions"><button class="btn" onclick={() => (fromCards ? ondone() : (step = "choose"))}>Voltar</button><button class="btn primary" disabled={busy || pasted.trim().length < 4} onclick={redeem}>{@html ICON.download}{busy ? "Baixando…" : "Baixar e entrar"}</button></div>
   {/if}
   {#if error}<Note text={error} icon="alert" error />{/if}
 </div>

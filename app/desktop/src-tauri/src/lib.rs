@@ -97,8 +97,9 @@ fn engine_loop(mut engine: Engine, jobs: Receiver<Job>, app: AppHandle) {
                 engine.rt.now = chrono::Utc::now();
                 engine.rt.offset = Some(offset());
                 let r = f(&mut engine);
-                let _ = reply.send(r);
+                // published before the answer, so the page's get_state right after a command already sees it
                 engine.publish_now();
+                let _ = reply.send(r);
             }
             Err(RecvTimeoutError::Timeout) => {
                 last_tick = std::time::Instant::now();

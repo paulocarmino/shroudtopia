@@ -10,7 +10,7 @@ const row = (who: "me" | "friend", when: string, size: string, tags: string[]): 
 const play = (disabled = false) => ({ label: "Jogar", kind: "play" as const, icon: "play", cls: "primary", disabled });
 
 function world(s: string, id = "w1", name = "CopyWithGabe", fr = FR): WorldView {
-  const base = { id, name, with: `com ${fr}`, file: id === "w1" ? "world2.ksd" : "world3.ksd", store: "steam" as const, members: 2, progress: null, note: null, choices: null, state: s };
+  const base = { id, name, with: `com ${fr}`, file: id === "w1" ? "world2.ksd" : "world3.ksd", store: "steam" as const, members: 2, updatedAt: new Date(Date.now() - (id === "w1" ? 7 : 95) * 6e4).toISOString(), progress: null, note: null, choices: null, state: s };
   switch (s) {
     case "me":
       return { ...base, tone: "live", status: "Você está hospedando", line: "Desde 21:12 · último autosave enviado às 22:31", action: { label: "Enshrouded aberto", kind: "none", icon: null, cls: "", disabled: true }, history: [row("me", "hoje, desde 21:12", "1,8 MB", ["live"]), row("friend", "ontem, 21:48 – 23:40", "1,8 MB", ["cloud"]), row("me", "ontem, 14:02 – 17:15", "1,7 MB", [])] };

@@ -396,6 +396,22 @@ input, select { font: inherit; }
 .skin-st .w2-head { gap: 12px; }
 .skin-st .st-medal { width: 48px; height: 48px; flex: none; object-fit: contain; pointer-events: none; user-select: none; }
 .more-worlds { display: flex; gap: 8px; flex-wrap: wrap; }
+/* on the valley they need a surface of their own, or they read as disabled */
+.more-worlds .btn { background: var(--surface); border-style: dashed; color: var(--ink); }
+.more-worlds .btn:hover { background: var(--surface-2); }
+.more-worlds .btn svg { color: var(--brand); }
+/* a world's invite code, open in its card */
+.invite { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); background: oklch(0.7 0.19 45 / 0.06); }
+.invite .txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.invite .name { font-weight: 600; font-size: 13.5px; }
+.invite .sub { color: var(--muted); font-size: 12.5px; }
+.invite .val { font-size: 20px; font-weight: 600; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; user-select: all; }
 .w2-head .with { color: var(--muted); font-size: 12.5px; }
+/* "atualizado há 5 min": opens the world's sessions */
+.w2-head .with .sep { margin: 0 6px; }
+.w2-head .ago { border: 0; background: none; padding: 0; color: inherit; font: inherit; display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+.w2-head .ago:hover { color: var(--ink); }
+.w2-head .ago .fold { width: 12px; height: 12px; transition: transform .15s; }
+.w2-head .ago.open .fold { transform: rotate(180deg); }
 .slots .row.taken { opacity: .5; cursor: not-allowed; }
 .slots .row.taken:hover { background: transparent; }

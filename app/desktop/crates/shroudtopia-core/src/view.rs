@@ -87,6 +87,9 @@ pub struct WorldView {
     pub file: String,
     pub store: StoreKind,
     pub members: usize,
+    /// When the world last changed on the server (its newest version, or this PC's last autosave while hosting):
+    /// the card's "atualizado há 5 min"
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -464,6 +467,7 @@ fn world_view(e: &mut Engine, off: FixedOffset) -> Option<WorldView> {
         file: crate::steam::slot_file(link.slot),
         store: link.store,
         members: w.as_ref().map(|w| w.members.len()).unwrap_or(1),
+        updated_at: head.as_ref().map(|h| h.created_at).max(session.as_ref().and_then(|s| s.last_autosave_at)),
     })
 }
 

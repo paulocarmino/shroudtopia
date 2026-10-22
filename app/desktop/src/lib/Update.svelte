@@ -7,10 +7,10 @@
   import Note from "./Note.svelte";
   import ProgressLine from "./ProgressLine.svelte";
 
-  let { s, busy, onupdate, onfolder, onautostart, onstore, oninvite, onlogout }: {
+  let { s, busy, onupdate, onfolder, onautostart, onstore, onlogout }: {
     s: UiState; busy: boolean;
     onupdate: () => void; onfolder: () => void; onautostart: (on: boolean) => void;
-    onstore: (world: string, into: string) => void; oninvite: (world: string) => void; onlogout: () => void;
+    onstore: (world: string, into: string) => void; onlogout: () => void;
   } = $props();
   const u = $derived(s.update);
   const avail = $derived(u.state === "avail" || u.state === "blocked");
@@ -46,17 +46,13 @@
       <Toggle on={s.settings.autostart} label="Iniciar com o Windows" onchange={onautostart} />
     </div>
     {#each worlds as world (world.id)}
-      <!-- per world: where it lives on this PC, and its own invite code -->
+      <!-- per world: where it lives on this PC (its invite is on its card) -->
       <div class="row">
         <div class="txt"><div class="name">Onde o mundo fica</div><div class="sub">{world.name} · {world.file} · {world.store === "steam" ? "jogos salvos do Steam" : "jogos salvos locais"}</div></div>
         <div class="seg small">
           <button aria-pressed={world.store === "steam"} disabled={busy || !s.settings.steamStore} onclick={() => onstore(world.id, "steam")}>Steam</button>
           <button aria-pressed={world.store === "local"} disabled={busy || !s.settings.localStore} onclick={() => onstore(world.id, "local")}>Local</button>
         </div>
-      </div>
-      <div class="row">
-        <div class="txt"><div class="name">Convidar amigo</div><div class="sub">Um código novo para o {world.name}</div></div>
-        <button class="btn" disabled={busy} onclick={() => oninvite(world.id)}>{@html ICON.link}Gerar código</button>
       </div>
     {/each}
     {#if s.sync?.player}

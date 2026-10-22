@@ -15,14 +15,10 @@
   let error = $state<string | null>(null);
   /** what "Entrar pelo Steam" says when Steam did not start the game by itself */
   let notice = $state<string | null>(null);
-  /** the code screen stays up after sharing (or "Gerar código") until "Pronto", though the phase is already main */
-  let codeScreen = $state<string | null>(null);
-  /** the first-run flow stays up after a redeem until "Pronto" */
-  let holdFirstRun = $state(false);
   /** "Compartilhar outro mundo" / "Tenho um código" under the cards: the pairing flow at that step */
   let pairing = $state<"slot" | "paste" | null>(null);
-  /** the world a code from "Convidar amigo" is for */
-  let codeFor = $state<string | null>(null);
+  /** the codes open on the cards, by world (with the world's members then, to tell when the friend came in) */
+  let invites = $state<Record<string, { code: string; members: number }>>({});
 
   onMount(() => {
     const q = new URLSearchParams(location.search);
@@ -54,15 +50,11 @@
   const attention = $derived(worlds.some((x) => x.state === "diverged"));
   const game = $derived(s?.gameRunning ?? false);
   const updBadge = $derived(s?.update.badge ?? false);
-  // while pairing, the flow keeps its own steps (the code, the redeemed world) after the phase turns main
-  $effect(() => {
-    if (phase === "setup") holdFirstRun = true;
-  });
   // the hint is done once the game is up
   $effect(() => {
     if (game) notice = null;
   });
-  const firstRun = $derived(phase !== "main" || codeScreen !== null || holdFirstRun || pairing !== null);
+  const firstRun = $derived(phase !== "main" || pairing !== null);
 
   function onaction(world: string, kind: string) {
     if (kind === "play") act(() => api.play(world));
@@ -75,11 +67,21 @@
     if (!s) return;
     act(() => (s!.update.state === "ok" ? api.updateCheck() : api.updateApply()));
   }
-  async function invite(world: string) {
-    await act(async () => {
-      codeFor = worlds.find((x) => x.id === world)?.name ?? null;
-      codeScreen = (await api.newInvite(world)).code;
-    });
+  function showCode(world: string, code: string) {
+    invites = { ...invites, [world]: { code, members: worlds.find((x) => x.id === world)?.members ?? 1 } };
+  }
+  function invite(world: string) {
+    act(async () => showCode(world, (await api.newInvite(world)).code));
+  }
+  function closeCode(world: string) {
+    const { [world]: _, ...rest } = invites;
+    invites = rest;
+  }
+  /** the pairing flow is done: back to the cards with the new world in them */
+  async function paired(note: string | null) {
+    s = await api.state();
+    pairing = null;
+    notice = note;
   }
 </script>
 
@@ -131,27 +133,38 @@
         <div class="app-body">
           {#if tab === "world" && firstRun}
             <!-- login and pairing live in the Mundo tab, so Mods and Atualização never wait on them -->
-            <FirstRun
-              {s}
-              embedded
-              start={codeScreen ? "code" : (pairing ?? "choose")}
-              invite={codeScreen}
-              inviteFor={codeFor}
-              ondone={() => {
-                codeScreen = null;
-                holdFirstRun = false;
-                pairing = null;
-              }}
-            />
+            <!-- keyed: the flow's step comes from `start` only when it mounts -->
+            {#key pairing}
+              <FirstRun
+                {s}
+                embedded
+                start={pairing ?? "choose"}
+                ondone={() => (pairing = null)}
+                onshared={async (world, code) => {
+                  await paired(null);
+                  if (world) showCode(world, code);
+                }}
+                onredeemed={(_, text) => paired(text)}
+              />
+            {/key}
           {:else if tab === "world"}
             <div class="sec">
               <div class="sec-title"><h2>{worlds.length > 1 ? "Mundos compartilhados" : "Mundo compartilhado"}</h2></div>
               {#each worlds as w (w.id)}
-                <WorldCard {w} {busy} onaction={(kind) => onaction(w.id, kind)} onresolve={(keepMine) => act(() => api.resolve(w.id, keepMine))} />
+                <WorldCard
+                  {w}
+                  {busy}
+                  invite={invites[w.id] ?? null}
+                  onaction={(kind) => onaction(w.id, kind)}
+                  onresolve={(keepMine) => act(() => api.resolve(w.id, keepMine))}
+                  oninvite={() => invite(w.id)}
+                  onclosecode={() => closeCode(w.id)}
+                />
               {/each}
               <div class="more-worlds">
-                <button class="btn" disabled={busy} onclick={() => (pairing = "slot")}>{@html ICON.plus}Compartilhar outro mundo</button>
-                <button class="btn" disabled={busy} onclick={() => (pairing = "paste")}>{@html ICON.link}Tenho um código</button>
+                <!-- they only open the flow, so they never wait on another action -->
+                <button class="btn" onclick={() => (pairing = "slot")}>{@html ICON.plus}Compartilhar outro mundo</button>
+                <button class="btn" onclick={() => (pairing = "paste")}>{@html ICON.link}Tenho um código</button>
               </div>
               {#if sync?.error}<Note text={sync.error} icon="alert" error />{/if}
             </div>
@@ -168,7 +181,6 @@
               onfolder={() => act(() => api.chooseGameFolder())}
               onautostart={(on) => act(() => api.setAutostart(on))}
               onstore={(world, into) => act(() => api.moveStore(world, into))}
-              oninvite={invite}
               onlogout={() => act(() => api.logout())}
             />
           {/if}
