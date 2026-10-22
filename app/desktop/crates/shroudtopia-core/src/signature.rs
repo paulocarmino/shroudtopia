@@ -5,12 +5,17 @@
 //! sign are refused before they are installed.
 //!
 //! ```text
-//! shroudtopia release v1
+//! shroudtopia release v2
 //! version 0.4.3
 //! app 0.1.1
 //! file Shroudtopia.exe <size> <sha256>
-//! file shroudtopia-mods.zip <size> <sha256>
+//! file shroudtopia-mods-v2.zip <size> <sha256>
 //! ```
+//!
+//! v2 is the mods zip with folders in it (`mods/minimap_mod/...`, EML's `dbghelp.dll`). Apps up to 0.1.5 read only
+//! v1 (`shroudtopia-release.json`, `shroudtopia-mods.zip`, `mods/<name>.dll` and nothing else) and install the mods
+//! before they swap themselves, so a zip they refuse would keep them on the old app for good: every release carries
+//! both, the v1 pair with the mods those apps know, and this app reads only the v2 pair.
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -20,10 +25,10 @@ use ed25519_dalek::{Signature, VerifyingKey};
 /// `%USERPROFILE%\.shroudtopia\release-signing.key` on Paulo's PC. Another key here is another app.
 pub const PRODUCT_KEY: &str = include_str!("../../../release-signing.pub");
 
-pub const HEADER: &str = "shroudtopia release v1";
+pub const HEADER: &str = "shroudtopia release v2";
 pub const EXE_ASSET: &str = "Shroudtopia.exe";
-pub const MODS_ASSET: &str = "shroudtopia-mods.zip";
-pub const MANIFEST_ASSET: &str = "shroudtopia-release.json";
+pub const MODS_ASSET: &str = "shroudtopia-mods-v2.zip";
+pub const MANIFEST_ASSET: &str = "shroudtopia-release-v2.json";
 pub const MAX_ASSET_BYTES: u64 = 256 * 1024 * 1024;
 
 pub const BAD_SIGNATURE: &str = "a atualização não tem a assinatura do autor";
@@ -144,15 +149,15 @@ mod tests {
     const SHA: &str = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
 
     fn text() -> String {
-        format!("{HEADER}\nversion 0.4.3\napp 0.1.1\nfile Shroudtopia.exe 5 {SHA}\nfile shroudtopia-mods.zip 5 {SHA}\n")
+        format!("{HEADER}\nversion 0.4.3\napp 0.1.1\nfile Shroudtopia.exe 5 {SHA}\nfile shroudtopia-mods-v2.zip 5 {SHA}\n")
     }
 
     /// The same text signed by `openssl pkeyutl -sign -rawin` (what release.sh runs) with a throwaway key: the
     /// signatures the script makes are the ones this crate checks.
     #[test]
     fn an_openssl_signature_verifies() {
-        let key = "t/sIFa+/WRoZ6NS3AmpXMO5o8zsJlnnMKqrFlIhYcwg=";
-        let sig = "C3BOjdQOgG0qdvaAV417tgu8+wiC8PyQwroNVbf5CKAqNF+0QHDhOJxz2i+uwThI/PS90xlJ2yjk6QccUFhVBA==";
+        let key = "7/+l4w5vHZfRzrt70ELCAs//C7SJmvx6XUs0BW+vlQI=";
+        let sig = "a+6NJz1SzuxnLSLnIgMpellVQ1qqgirfGvls/t5iSssOou+d9sDfhT8o1JrfoU2k2IHwmrfqiFsT6AbxMh+OCw==";
         let m = verify(&text(), sig, key).unwrap();
         assert_eq!((m.version.as_str(), m.app.as_str(), m.exe.size, m.mods.name.as_str()), ("0.4.3", "0.1.1", 5, MODS_ASSET));
         assert_eq!(verify(&text(), sig, PRODUCT_KEY).err(), Some(BAD_SIGNATURE));
@@ -170,7 +175,8 @@ mod tests {
         let good = text();
         assert!(verify(&good, &sign(&good), &test_key()).is_ok());
         for bad in [
-            good.replace(HEADER, "shroudtopia release v2"),
+            good.replace(HEADER, "shroudtopia release v1"),
+            good.replace(MODS_ASSET, "shroudtopia-mods.zip"),
             good.trim_end().to_string(),
             format!("{good}\n"),
             good.replace('\n', "\r\n"),

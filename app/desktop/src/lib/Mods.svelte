@@ -22,7 +22,7 @@
       {@const isOpen = open === m.key && m.options.length > 0}
       <div class="mod">
         <div class="mod-row" class:off={!m.active}>
-          <div class="txt"><div class="name">{m.name}</div>{#if m.sub}<div class="sub">{m.sub}</div>{/if}</div>
+          <div class="txt"><div class="name">{m.name}{#if m.restart} <span class="tag warn" title="Liga ou desliga na próxima vez que o Enshrouded abrir">requer restart</span>{/if}</div>{#if m.sub}<div class="sub">{m.sub}</div>{/if}</div>
           {#if m.options.length}
             <button class="chev" aria-expanded={isOpen} aria-label="Opções de {m.name}" onclick={() => (open = open === m.key ? null : m.key)}>{@html ICON.chev}</button>
           {/if}

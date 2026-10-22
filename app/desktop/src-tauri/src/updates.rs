@@ -18,6 +18,8 @@ use crate::Shared;
 #[serde(rename_all = "camelCase", default)]
 struct Saved {
     mods_version: Option<String>,
+    /// the layout of the zip `mods_version` came in (updater::MODS_LAYOUT); 0 when an app up to 0.1.5 installed it
+    mods_layout: u32,
     last_check: Option<DateTime<Utc>>,
 }
 
@@ -43,8 +45,10 @@ pub struct Updates {
 impl Updates {
     pub fn new(data_dir: &Path) -> Updates {
         let file = data_dir.join("updates.json");
-        let saved = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-        Updates { file, inner: Mutex::new(Inner { saved, ..Default::default() }) }
+        let saved: Saved = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        // mods from an older layout: look now rather than in up to an hour (right after an update from 0.1.5 or older)
+        let check_now = saved.mods_version.is_some() && saved.mods_layout < updater::MODS_LAYOUT;
+        Updates { file, inner: Mutex::new(Inner { saved, check_now, ..Default::default() }) }
     }
 
     fn save(&self, inner: &Inner) {
@@ -65,8 +69,10 @@ impl Updates {
     }
 }
 
-fn wanted(offer: &Offer, installed: Option<&str>) -> bool {
-    installed.is_none_or(|v| signature::newer(&offer.manifest.version, v)) || signature::newer(&offer.manifest.app, shroudtopia_core::APP_VERSION)
+fn wanted(offer: &Offer, saved: &Saved) -> bool {
+    saved.mods_layout < updater::MODS_LAYOUT
+        || saved.mods_version.as_deref().is_none_or(|v| signature::newer(&offer.manifest.version, v))
+        || signature::newer(&offer.manifest.app, shroudtopia_core::APP_VERSION)
 }
 
 pub fn start(app: AppHandle) {
@@ -105,7 +111,7 @@ fn step(app: &AppHandle) {
         let mut i = u.inner.lock().unwrap();
         i.saved.last_check = Some(Utc::now());
         match r {
-            Ok(Some(offer)) if wanted(&offer, i.saved.mods_version.as_deref()) => {
+            Ok(Some(offer)) if wanted(&offer, &i.saved) => {
                 i.error = None;
                 i.none_published = false;
                 i.phase = Phase::Available(Box::new(offer));
@@ -201,6 +207,7 @@ fn install(app: &AppHandle, offer: &Offer) {
         match &r {
             Ok(_) => {
                 i.saved.mods_version = Some(offer.manifest.version.clone());
+                i.saved.mods_layout = updater::MODS_LAYOUT;
                 i.error = None;
                 i.phase = Phase::Idle;
             }

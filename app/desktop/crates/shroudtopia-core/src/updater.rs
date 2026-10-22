@@ -1,5 +1,5 @@
 //! Updates from the repository's GitHub Releases (`paulocarmino/shroudtopia` is public): the latest release carries
-//! `shroudtopia-release.json` (the signed manifest, signature.rs), `shroudtopia-mods.zip` (loader + mods) and
+//! `shroudtopia-release-v2.json` (the signed manifest, signature.rs), `shroudtopia-mods-v2.zip` (loaders + mods) and
 //! `Shroudtopia.exe`. Nothing is installed that the manifest does not name by size and sha256.
 //!
 //! - The mods go into the game folder only while `enshrouded.exe` is closed (its DLLs are locked while it runs);
@@ -138,13 +138,24 @@ pub fn download(url: &str, dest: &Path, signed: &SignedFile, progress: &mut dyn 
     receive(&mut resp.into_reader(), dest, signed, progress)
 }
 
-/// Whether a path of the mods zip is one the app installs: the loader (`shroudtopia.dll`, `winmm.dll`) and
-/// `mods/<name>.dll`. Anything else (another folder, `..`, the config) refuses the whole zip.
+/// The mods zip's layout this app installs (signature.rs, v2). `updates.json` keeps the one last installed: a PC whose
+/// mods came from a v1 zip (an app up to 0.1.5) gets the v2 zip of the same release.
+pub const MODS_LAYOUT: u32 = 2;
+
+/// The files a mod folder may hold: the DLL, its manifest and Lua, and the minimap's data (images, shaders, tables).
+const FOLDER_FILES: &[&str] = &["dll", "json", "lua", "txt", "md", "bin", "rgb", "rgba", "spv", "frag", "vert"];
+
+/// Whether a path of the mods zip is one the app installs: the loaders (`shroudtopia.dll`, `winmm.dll`, EML's
+/// `dbghelp.dll`), `mods/<name>.dll`, and the files of a mod folder (`mods/<folder>/...`, two levels deep at most,
+/// with an extension in `FOLDER_FILES`). Anything else (another folder, `..`, the config) refuses the whole zip.
 pub fn installable(path: &str) -> bool {
     let plain = |s: &str| !s.is_empty() && s.len() <= 64 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'.') && !s.starts_with('.');
+    let folder_file = |s: &str| plain(s) && s.rsplit_once('.').is_some_and(|(_, ext)| FOLDER_FILES.contains(&ext.to_ascii_lowercase().as_str()));
     match path.split('/').collect::<Vec<_>>().as_slice() {
-        [name] => matches!(*name, "shroudtopia.dll" | "winmm.dll"),
+        [name] => matches!(*name, "shroudtopia.dll" | "winmm.dll" | "dbghelp.dll"),
         ["mods", name] => plain(name) && name.to_ascii_lowercase().ends_with(".dll"),
+        ["mods", folder, name] => plain(folder) && folder_file(name),
+        ["mods", folder, sub, name] => plain(folder) && plain(sub) && folder_file(name),
         _ => false,
     }
 }
@@ -181,7 +192,7 @@ pub fn install_mods(zip_path: &Path, game: &Path, backup: &Path, progress: &mut 
             let keep = backup.join(name);
             fs::create_dir_all(keep.parent().unwrap()).and_then(|_| fs::copy(&dest, &keep)).map_err(|e| format!("não deu para guardar a cópia de {name}: {e}"))?;
         }
-        let tmp = dest.with_extension("dll.shroudtopia-tmp");
+        let tmp = dest.with_file_name(format!("{}.shroudtopia-tmp", dest.file_name().and_then(|n| n.to_str()).unwrap_or("file")));
         fs::write(&tmp, bytes).and_then(|_| fs::rename(&tmp, &dest)).map_err(|e| {
             let _ = fs::remove_file(&tmp);
             format!("não deu para gravar {name} na pasta do jogo ({e}). Feche o Enshrouded e tente de novo.")
@@ -429,8 +440,14 @@ mod tests {
         assert_eq!(fs::read(game.join("mods/flight_mod.dll")).unwrap(), b"flight");
         assert_eq!(fs::read(backup.join("shroudtopia.dll")).unwrap(), b"old loader");
         assert_eq!(fs::read(game.join("shroudtopia.json")).unwrap(), b"{\"mine\":true}");
+        // mod folders (the minimap, EML's Lua mods) and EML itself
+        fs::write(&zip, zip_of(&[("shroudtopia.dll", b"new loader"), ("dbghelp.dll", b"eml"), ("mods/minimap_mod/minimap_mod.dll", b"map"), ("mods/minimap_mod/mod.json", b"{}"), ("mods/minimap_mod/embervale_minimap_terrain.frag", b"f"), ("mods/minimap_mod/embervale_minimap_terrain.vert", b"v"), ("mods/max-stack/src/mod.lua", b"lua")])).unwrap();
+        assert_eq!(install_mods(&zip, &game, &backup, &mut |_, _| {}).unwrap().len(), 7);
+        assert_eq!(fs::read(game.join("mods/minimap_mod/embervale_minimap_terrain.vert")).unwrap(), b"v");
+        assert_eq!(fs::read(game.join("mods/max-stack/src/mod.lua")).unwrap(), b"lua");
+        assert_eq!(fs::read(game.join("dbghelp.dll")).unwrap(), b"eml");
         // a zip with anything else is refused whole, before a file is written
-        for bad in ["shroudtopia.json", "../evil.dll", "mods/../../x.dll", "mods/sub/x.dll", "other.exe", "/abs.dll"] {
+        for bad in ["shroudtopia.json", "../evil.dll", "mods/../../x.dll", "mods/a/b/c/x.dll", "mods/sub/x.exe", "mods/sub/.hidden.json", "mods/../x.json", "other.exe", "/abs.dll"] {
             fs::write(&zip, zip_of(&[("shroudtopia.dll", b"newer"), (bad, b"x")])).unwrap();
             assert!(install_mods(&zip, &game, &backup, &mut |_, _| {}).is_err(), "{bad}");
             assert_eq!(fs::read(game.join("shroudtopia.dll")).unwrap(), b"new loader", "{bad}");

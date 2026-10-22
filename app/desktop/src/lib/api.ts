@@ -29,7 +29,7 @@ export type OptValue =
   | { kind: "number"; value: number; min: number; max: number; step: number }
   | { kind: "other"; text: string };
 export type Opt = { key: string; label: string } & OptValue;
-export interface ModView { key: string; name: string; sub: string; active: boolean; options: Opt[] }
+export interface ModView { key: string; name: string; sub: string; active: boolean; options: Opt[]; restart: boolean }
 export interface UpdateView { state: "ok" | "avail" | "blocked" | "installing"; name: string; sub: string; action: Action | null; progress: Progress | null; changes: string[]; badge: boolean; appVersion: string }
 export interface UiState {
   sync: Snapshot | null; gameRunning: boolean;

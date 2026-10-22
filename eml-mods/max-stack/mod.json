@@ -1,0 +1,9 @@
+{
+  "id": "max-stack",
+  "name": "Max Stack",
+  "version": "1.0.1",
+  "capabilities": ["patch"],
+  "description": "Stackable items stack 5x their vanilla size, up to 999; nothing stacks less than in vanilla.",
+  "authors": ["Enshrouded Mods", "Shroudtopia"],
+  "license": "MIT"
+}

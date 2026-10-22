@@ -8,7 +8,11 @@ jobs:
     name: win_x64
     runs-on: windows-latest
     steps:
+    # the minimap submodule has paths past Windows' 260 characters
+    - run: git config --system core.longpaths true
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
     - uses: ilammy/msvc-dev-cmd@v1
     - name: build_core
       run: |
@@ -18,10 +22,16 @@ jobs:
       run: |
         MSBuild "winmm\winmm.sln" /t:Build /p:Configuration=Release /p:OutDir="${{ github.workspace }}/build/" /p:Platform=x64
       shell: cmd
+    - name: build_minimap
+      run: |
+        MSBuild "third-party/Enshrouded-minimap/minimap_mod.vcxproj" /t:Build /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:OutDir="${{ github.workspace }}/build/mods/minimap_mod/"
+        xcopy /E /I /Y /Q "third-party\Enshrouded-minimap\assets" "build\mods\minimap_mod"
+      shell: cmd
     - name: upload
       uses: actions/upload-artifact@v4
       with:
         name: win_x64
         path: |
           ${{ github.workspace }}/build/*.dll
-          ${{ github.workspace }}/build/mods/**/*.dll
+          ${{ github.workspace }}/build/mods/**/*
+          !${{ github.workspace }}/build/mods/**/*.pdb

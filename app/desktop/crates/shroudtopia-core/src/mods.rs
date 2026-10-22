@@ -28,10 +28,15 @@ pub struct KnownOpt {
 
 pub struct KnownMod {
     pub key: &'static str,
+    /// the file under `<game>/mods` that says it is installed
     pub dll: &'static str,
     pub name: &'static str,
     pub sub: &'static str,
     pub options: &'static [KnownOpt],
+    /// An EML mod (eml-mods/): its folder under `<game>/mods`. EML does not read shroudtopia.json, so its on/off is
+    /// `enabled=` in that folder's config.txt, which the mod reads when the game starts (the window says it needs a
+    /// restart).
+    pub eml: Option<&'static str>,
 }
 
 /// The mods this repository ships, with the names the window shows (the prototype's). The basics mod reads
@@ -48,16 +53,50 @@ pub const CATALOG: &[KnownMod] = &[
             KnownOpt { key: "_no_resource_cost", label: "Construir e usar itens sem gastar", kind: OptKind::Bool },
             KnownOpt { key: "hide_stamina_gauge", label: "Esconder a barra de stamina", kind: OptKind::Bool },
         ],
+        eml: None,
     },
-    KnownMod { key: "Flight Mod", dll: "flight_mod.dll", name: "Voo", sub: "Planar sem perder altura", options: &[] },
+    KnownMod { key: "Flight Mod", dll: "flight_mod.dll", name: "Voo", sub: "Planar sem perder altura", options: &[], eml: None },
     KnownMod {
         key: "FirstPersonView",
         dll: "first_person_view.dll",
         name: "Primeira pessoa",
         sub: "Câmera nos olhos do personagem",
         options: &[KnownOpt { key: "camera_distance", label: "Distância da câmera", kind: OptKind::Number { default: -0.15, min: -0.5, max: 0.5, step: 0.05 } }],
+        eml: None,
+    },
+    // third-party/Enshrouded-minimap; its other options (position, keys, style...) show by their key
+    KnownMod {
+        key: "minimap_mod",
+        dll: "minimap_mod/minimap_mod.dll",
+        name: "Minimapa",
+        sub: "Mapa no canto da tela, relógio e clima (F10 mostra e esconde)",
+        options: &[
+            KnownOpt { key: "show_clock", label: "Relógio", kind: OptKind::Bool },
+            KnownOpt { key: "show_weather", label: "Clima", kind: OptKind::Bool },
+            KnownOpt { key: "show_fog_of_war", label: "Névoa onde ainda não explorou", kind: OptKind::Bool },
+            KnownOpt { key: "show_other_players", label: "Outros jogadores", kind: OptKind::Bool },
+            KnownOpt { key: "show_death_markers", label: "Onde você morreu", kind: OptKind::Bool },
+            KnownOpt { key: "scale_percent", label: "Tamanho (%)", kind: OptKind::Number { default: 100.0, min: 50.0, max: 200.0, step: 25.0 } },
+        ],
+        eml: None,
+    },
+    KnownMod {
+        key: "max-stack",
+        dll: "max-stack/mod.json",
+        name: "Max Stack",
+        sub: "Itens empilham 5× mais, até 999",
+        options: &[],
+        eml: Some("max-stack"),
     },
 ];
+
+/// `enabled=` of an EML mod's config.txt; no file (or no line) is on, as the mod reads it.
+fn eml_enabled(mods_dir: &Path, folder: &str) -> bool {
+    let text = fs::read_to_string(mods_dir.join(folder).join(EML_CONFIG)).unwrap_or_default();
+    !text.lines().filter_map(|l| l.trim().strip_prefix("enabled")).filter_map(|r| r.trim_start().strip_prefix('=')).any(|v| v.trim().eq_ignore_ascii_case("false"))
+}
+
+const EML_CONFIG: &str = "config.txt";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -86,6 +125,8 @@ pub struct ModView {
     pub sub: String,
     pub active: bool,
     pub options: Vec<OptView>,
+    /// a change applies the next time the game starts
+    pub restart: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,6 +207,15 @@ pub fn view(path: &Path, mods_dir: Option<&Path>) -> Result<Vec<ModView>, ModsEr
     let mods = root.get("mods").and_then(Value::as_object).unwrap_or(&empty);
     let mut out = Vec::new();
     for k in CATALOG {
+        if let Some(folder) = k.eml {
+            // listed only when it is installed; its state is in its own folder, not in shroudtopia.json
+            if let Some(dir) = mods_dir.filter(|d| d.join(k.dll).is_file()) {
+                let mut v = mod_view(k.key, &empty, Some(k));
+                v.active = eml_enabled(dir, folder);
+                out.push(v);
+            }
+            continue;
+        }
         let entry = mods.get(k.key).and_then(Value::as_object);
         let installed = mods_dir.is_some_and(|d| d.join(k.dll).is_file());
         if entry.is_none() && !installed {
@@ -196,11 +246,19 @@ fn mod_view(key: &str, entry: &Map<String, Value>, known: Option<&KnownMod>) -> 
     }
     let (name, sub) = known.map(|k| (k.name.to_string(), k.sub.to_string())).unwrap_or_else(|| (key.to_string(), String::new()));
     let sub = format!("{sub}{}", opt_count(options.len())).trim_start_matches(" · ").to_string();
-    ModView { key: key.into(), name, sub, active: entry.get("active").and_then(Value::as_bool).unwrap_or(false), options }
+    ModView { key: key.into(), name, sub, active: entry.get("active").and_then(Value::as_bool).unwrap_or(false), options, restart: known.is_some_and(|k| k.eml.is_some()) }
 }
 
 /// Sets `mods.<mod_key>.<opt_key>` (`active` for the mod's own toggle) and writes the file.
 pub fn set(path: &Path, mod_key: &str, opt_key: &str, value: Value) -> Result<(), ModsError> {
+    if let Some(folder) = known(mod_key).and_then(|k| k.eml) {
+        let (Some(on), "active") = (value.as_bool(), opt_key) else { return Err(ModsError::Invalid(format!("{mod_key} só liga e desliga"))) };
+        let dir = path.parent().unwrap_or(Path::new(".")).join("mods").join(folder);
+        if !dir.is_dir() {
+            return Err(ModsError::Missing);
+        }
+        return fs::write(dir.join(EML_CONFIG), format!("enabled={on}\n")).map_err(|e| ModsError::Io(e.to_string()));
+    }
     let mut root = match read(path) {
         Ok(root) => root,
         Err(ModsError::Missing) => default_config(),
@@ -209,9 +267,14 @@ pub fn set(path: &Path, mod_key: &str, opt_key: &str, value: Value) -> Result<()
     let value = match (&value, known(mod_key).and_then(|k| k.options.iter().find(|o| o.key == opt_key)).map(|o| o.kind)) {
         (Value::Number(n), Some(OptKind::Number { min, max, step, .. })) => {
             let v = n.as_f64().unwrap_or(0.0).clamp(min, max);
-            let digits = (1.0 / step).log10().ceil().max(0.0) as i32;
-            let scale = 10f64.powi(digits);
-            json!((v * scale).round() / scale)
+            if step.fract() == 0.0 {
+                // whole steps are written as integers (the minimap's scale_percent is 100, not 100.0)
+                json!(((v / step).round() * step) as i64)
+            } else {
+                let digits = (1.0 / step).log10().ceil().max(0.0) as i32;
+                let scale = 10f64.powi(digits);
+                json!((v * scale).round() / scale)
+            }
         }
         (Value::Number(n), _) if n.is_f64() => json!((n.as_f64().unwrap_or(0.0) * 1e6).round() / 1e6),
         _ => value,
@@ -315,5 +378,25 @@ mod tests {
         fs::write(&path, "{ not json").unwrap();
         assert!(matches!(view(&path, None), Err(ModsError::Invalid(_))));
         assert!(matches!(set(&path, "basics", "active", json!(true)), Err(ModsError::Invalid(_))), "a broken file is not overwritten");
+    }
+
+    #[test]
+    fn an_eml_mod_toggles_in_its_own_folder_and_needs_a_restart() {
+        let (dir, path) = copy();
+        let mods_dir = dir.path().join("mods");
+        let listed = |p: &Path| view(p, Some(&mods_dir)).unwrap().into_iter().find(|m| m.key == "max-stack");
+        assert!(listed(&path).is_none(), "not installed, not listed");
+        fs::create_dir_all(mods_dir.join("max-stack")).unwrap();
+        fs::write(mods_dir.join("max-stack/mod.json"), "{}").unwrap();
+        let m = listed(&path).unwrap();
+        assert_eq!((m.name.as_str(), m.active, m.restart), ("Max Stack", true, true), "no config.txt is on");
+        let before = fs::read_to_string(&path).unwrap();
+        set(&path, "max-stack", "active", json!(false)).unwrap();
+        assert_eq!(fs::read_to_string(mods_dir.join("max-stack/config.txt")).unwrap(), "enabled=false\n");
+        assert!(!listed(&path).unwrap().active);
+        assert_eq!(fs::read_to_string(&path).unwrap(), before, "shroudtopia.json is not touched");
+        set(&path, "max-stack", "active", json!(true)).unwrap();
+        assert!(listed(&path).unwrap().active);
+        assert!(!view(&path, Some(&mods_dir)).unwrap()[0].restart);
     }
 }

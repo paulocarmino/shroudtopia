@@ -10,3 +10,6 @@
 [submodule "third-party/nlohmann-json"]
 	path = third-party/nlohmann-json
 	url = https://github.com/nlohmann/json
+[submodule "third-party/Enshrouded-minimap"]
+	path = third-party/Enshrouded-minimap
+	url = https://github.com/paulocarmino/Enshrouded-minimap.git

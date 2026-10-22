@@ -10,13 +10,16 @@
 #
 #   bash app/desktop/scripts/release.sh <version> --dlls <folder> [--exe <Shroudtopia.exe>] [--notes <file>]
 #       <folder> has the loader and the mods as MSBuild left them (build.bat: build/x64): shroudtopia.dll, winmm.dll,
-#       and the mods' DLLs (basics_mod.dll, flight_mod.dll, first_person_view.dll), at its top or under mods/.
+#       the mods' DLLs (basics_mod.dll, flight_mod.dll, first_person_view.dll) and minimap_mod.dll, at its top or
+#       under mods/ (scripts/mods_zip.py adds the minimap's data, EML and Max Stack).
 #       --exe defaults to app/desktop/dist/Shroudtopia.exe (scripts/build.sh). Writes app/desktop/release/<version>/:
-#         shroudtopia-mods.zip      shroudtopia.dll + winmm.dll + mods/*.dll
+#         shroudtopia-mods.zip         v1: shroudtopia.dll + winmm.dll + mods/*.dll, for apps up to 0.1.5
+#         shroudtopia-release.json     v1 manifest { payload, signature }, signed with the private key
+#         shroudtopia-mods-v2.zip      v2: v1 + dbghelp.dll (EML) + mods/minimap_mod/ + mods/max-stack/
+#         shroudtopia-release-v2.json  v2 manifest (signature.rs), what this app reads
 #         Shroudtopia.exe
-#         Shroudtopia.zip           the exe zipped, for the landing page's download button
-#         shroudtopia-release.json  { payload, signature }: the manifest (signature.rs) signed with the private key
-#       and checks the signature with the public key before it says it is done.
+#         Shroudtopia.zip              the exe zipped, for the landing page's download button
+#       and checks both signatures with the public key before it says it is done.
 #
 # Needs bash, openssl 3 (Ed25519, `pkeyutl -rawin`) and python (to write the zip and the JSON).
 set -euo pipefail
@@ -71,23 +74,7 @@ APP_VERSION="$(grep -m1 '^version' "$DESKTOP/src-tauri/Cargo.toml" | sed 's/.*"\
 OUT="$DESKTOP/release/$VERSION"
 rm -rf "$OUT"
 mkdir -p "$OUT"
-"$PY" - "$DLLS" "$OUT/shroudtopia-mods.zip" <<'PYEOF'
-import os, sys, zipfile
-src, out = sys.argv[1], sys.argv[2]
-loader = ["shroudtopia.dll", "winmm.dll"]
-mods = ["basics_mod.dll", "flight_mod.dll", "first_person_view.dll"]
-def find(name):
-    for p in (os.path.join(src, name), os.path.join(src, "mods", name)):
-        if os.path.isfile(p):
-            return p
-    sys.exit(f"!! {name} not found in {src}")
-with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-    for name in loader:
-        z.write(find(name), name)
-    for name in mods:
-        z.write(find(name), "mods/" + name)
-print("    zip:", ", ".join(loader + ["mods/" + m for m in mods]))
-PYEOF
+"$PY" "$HERE/mods_zip.py" --dlls "$DLLS" --v1 "$OUT/shroudtopia-mods.zip" --v2 "$OUT/shroudtopia-mods-v2.zip"
 cp "$EXE" "$OUT/Shroudtopia.exe"
 # what the landing page hands out: the exe inside a zip (browsers and Windows treat a bare .exe download harshly).
 # The updater keeps using the signed Shroudtopia.exe; this zip is not part of the signed manifest.
@@ -99,27 +86,31 @@ with zipfile.ZipFile(os.path.join(out, "Shroudtopia.zip"), "w", zipfile.ZIP_DEFL
 PYEOF
 
 line() { printf 'file %s %s %s\n' "$1" "$(wc -c < "$OUT/$1" | tr -d ' ')" "$(openssl dgst -sha256 -r "$OUT/$1" | cut -d' ' -f1)"; }
-{
-    printf 'shroudtopia release v1\nversion %s\napp %s\n' "$VERSION" "$APP_VERSION"
-    line Shroudtopia.exe
-    line shroudtopia-mods.zip
-} > "$OUT/payload.txt"
-openssl pkeyutl -sign -rawin -inkey "$KEY" -in "$OUT/payload.txt" -out "$OUT/signature.bin"
-"$PY" - "$OUT" <<'PYEOF'
-import base64, json, os, sys
-out = sys.argv[1]
-payload = open(os.path.join(out, "payload.txt"), "rb").read().decode("utf-8")
-sig = base64.b64encode(open(os.path.join(out, "signature.bin"), "rb").read()).decode()
-json.dump({"payload": payload, "signature": sig}, open(os.path.join(out, "shroudtopia-release.json"), "w"), indent=2)
-PYEOF
-# check it with the public half, as the app will
 base64 -d < "$PUB" > "$OUT/pub.raw"
 "$PY" - "$OUT/pub.raw" "$OUT/pub.der" <<'PYEOF'
 import sys
 raw = open(sys.argv[1], "rb").read()
 open(sys.argv[2], "wb").write(bytes.fromhex("302a300506032b6570032100") + raw)
 PYEOF
-openssl pkeyutl -verify -rawin -pubin -keyform DER -inkey "$OUT/pub.der" -in "$OUT/payload.txt" -sigfile "$OUT/signature.bin" >/dev/null || stop "The release just signed does not verify."
+# sign <header> <mods zip> <manifest>: the manifest signature.rs reads, checked with the public half as the app will
+sign() {
+    {
+        printf '%s\nversion %s\napp %s\n' "$1" "$VERSION" "$APP_VERSION"
+        line Shroudtopia.exe
+        line "$2"
+    } > "$OUT/payload.txt"
+    openssl pkeyutl -sign -rawin -inkey "$KEY" -in "$OUT/payload.txt" -out "$OUT/signature.bin"
+    "$PY" - "$OUT" "$3" <<'PYEOF'
+import base64, json, os, sys
+out, name = sys.argv[1], sys.argv[2]
+payload = open(os.path.join(out, "payload.txt"), "rb").read().decode("utf-8")
+sig = base64.b64encode(open(os.path.join(out, "signature.bin"), "rb").read()).decode()
+json.dump({"payload": payload, "signature": sig}, open(os.path.join(out, name), "w"), indent=2)
+PYEOF
+    openssl pkeyutl -verify -rawin -pubin -keyform DER -inkey "$OUT/pub.der" -in "$OUT/payload.txt" -sigfile "$OUT/signature.bin" >/dev/null || stop "The $3 just signed does not verify."
+}
+sign "shroudtopia release v1" shroudtopia-mods.zip shroudtopia-release.json
+sign "shroudtopia release v2" shroudtopia-mods-v2.zip shroudtopia-release-v2.json
 rm -f "$OUT/payload.txt" "$OUT/signature.bin" "$OUT/pub.raw" "$OUT/pub.der"
 
 echo "==> Signed release $VERSION (app $APP_VERSION) in app/desktop/release/$VERSION:"
@@ -127,4 +118,5 @@ ls -l "$OUT"
 echo
 echo "Not published. To publish it (Paulo, by hand):"
 echo "  gh release create v$VERSION --repo paulocarmino/shroudtopia ${NOTES:+--notes-file \"$NOTES\"} \\"
-echo "     \"$OUT/shroudtopia-mods.zip\" \"$OUT/Shroudtopia.exe\" \"$OUT/Shroudtopia.zip\" \"$OUT/shroudtopia-release.json\""
+echo "     \"$OUT/shroudtopia-mods.zip\" \"$OUT/shroudtopia-release.json\" \"$OUT/shroudtopia-mods-v2.zip\" \"$OUT/shroudtopia-release-v2.json\" \\"
+echo "     \"$OUT/Shroudtopia.exe\" \"$OUT/Shroudtopia.zip\""
