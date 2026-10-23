@@ -92,7 +92,7 @@ pub const CATALOG: &[KnownMod] = &[
         key: "twitch-drops",
         dll: "twitch-drops/mod.json",
         name: "Drops da Twitch",
-        sub: "Quem tem um drop resgata todos; usam sem vincular a Twitch",
+        sub: "Quem tem um drop da Twitch resgata todos",
         options: &[],
         eml: Some("twitch-drops"),
     },

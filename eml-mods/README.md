@@ -6,9 +6,9 @@ Both read `mods/`. EML takes the folders whose `mod.json` it understands and run
 loads the DLL in a folder and skips one that has none, as it does `max-stack/`.
 
 - `max-stack/`: Max Stack 1.0.0 from Nexus (MIT) with its options fixed (×5, up to 999, never below vanilla).
-- `twitch-drops/`: every Twitch drop hands out the items of all 50 drops (57 outfits and decorations), which lose the
-  `TwitchDrop` flag so they equip and place without a Twitch link. Keen's server still says which drops a player has,
-  so it covers players with at least one drop unlocked; the host's game decides, so the host needs the mod.
+- `twitch-drops/`: every Twitch drop hands out the items of all 50 drops (57 outfits and decorations). Keen's server
+  still says which drops a player has, so it covers players with at least one drop unlocked; the host's game decides,
+  so the host needs the mod. The items keep their `TwitchDrop` flag: claiming needs it.
 
 `eml.lock` pins the EML release the app ships: `release.sh` downloads that `dbghelp.dll` and refuses any other bytes.
 To move to a newer EML, change the three lines there to the new release asset's URL, size and sha256 (GitHub shows

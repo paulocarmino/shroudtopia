@@ -72,7 +72,7 @@ export function mockState(): UiState {
         { key: "Flight Mod", name: "Voo", sub: "Planar sem perder altura", active: true, options: [], restart: false },
         { key: "FirstPersonView", name: "Primeira pessoa", sub: "Câmera nos olhos do personagem · 1 opção", active: false, options: [{ key: "camera_distance", label: "Distância da câmera", kind: "number", value: -0.15, min: -0.5, max: 0.5, step: 0.05 }], restart: false },
         { key: "max-stack", name: "Max Stack", sub: "Itens empilham 5× mais, até 999", active: true, options: [], restart: true },
-        { key: "twitch-drops", name: "Drops da Twitch", sub: "Quem tem um drop resgata todos; usam sem vincular a Twitch", active: true, options: [], restart: true },
+        { key: "twitch-drops", name: "Drops da Twitch", sub: "Quem tem um drop da Twitch resgata todos", active: true, options: [], restart: true },
       ],
     },
     update: update(q.get("upd") ?? "ok"),

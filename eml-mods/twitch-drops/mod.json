@@ -3,7 +3,7 @@
   "name": "Twitch Drops",
   "version": "1.0.0",
   "capabilities": ["patch"],
-  "description": "Every Twitch drop a player has unlocked hands out all the drop items (outfits and decorations), and they equip and place without a Twitch link.",
+  "description": "A player with any Twitch drop unlocked can claim and wear all the drop items (outfits and decorations).",
   "authors": ["Shroudtopia"],
   "license": "MIT"
 }

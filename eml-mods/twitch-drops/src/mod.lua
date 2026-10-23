@@ -3,12 +3,13 @@
 --
 -- How the game gates drops (build 1273043): keen::TwitchDropCollection lists 50 drops (Campaign01..09, CampaignXX),
 -- each with a dropId and the items it gives (`items` = ItemInfo itemIds, `itemRefs` = their guids, kept in step). Keen's
--- server tells the host which drops each player has; the Twitch menu then hands out the items of those drops. Each of
--- the 57 items carries the ItemFlag `TwitchDrop`, which blocks equipping/placing it without the Twitch permission.
+-- server tells the host which drops each player has; the Twitch menu lists, and lets a player claim and equip, the items
+-- of those drops. The 57 items carry the ItemFlag `TwitchDrop`, which claiming needs: with it cleared the menu still
+-- lists the item but Resgatar does nothing (tested 2026-10-22), so the flag stays.
 --
--- This mod gives every drop the items of all drops, so a player with any one drop unlocked can claim all of them, and
--- clears the `TwitchDrop` flag so they work without the permission. A player with no drop at all on Keen's server
--- still gets nothing from the menu. The host's game decides, so the host (or dedicated server) needs this mod.
+-- This mod gives every drop the items of all drops, so a player with any one drop unlocked can claim and wear all of
+-- them. A player with no drop at all on Keen's server still gets nothing. The host's game decides, so the host (or
+-- dedicated server) needs this mod.
 -- Runs on EML (dbghelp.dll), not on the Shroudtopia loader, which skips this folder (no DLL in it).
 
 local function enabled()
@@ -49,27 +50,6 @@ local function giveAllItems(collections, items, refs)
     return drops
 end
 
-local function clearTwitchFlag(refs)
-    local cleared = 0
-    for _, ref in ipairs(refs) do
-        local ok, resource = pcall(function()
-            return game.assets.get_resource(ref, "keen::ItemInfo")
-        end)
-        if ok and resource and resource.data then
-            local item = resource.data
-            local flags, had = {}, false
-            for _, flag in ipairs(item.flags) do
-                if flag == "TwitchDrop" then had = true else flags[#flags + 1] = flag end
-            end
-            if had then
-                item.flags = flags
-                cleared = cleared + 1
-            end
-        end
-    end
-    return cleared
-end
-
 if enabled() then
     local collections = game.assets.get_resources_by_type("keen::TwitchDropCollection")
     local items, refs = collectItems(collections)
@@ -78,8 +58,7 @@ if enabled() then
         return
     end
     local drops = giveAllItems(collections, items, refs)
-    local cleared = clearTwitchFlag(refs)
-    print(string.format("[twitch-drops] drops=%d items=%d twitch flag cleared=%d", drops, #items, cleared))
+    print(string.format("[twitch-drops] drops=%d items=%d", drops, #items))
 else
     print("[twitch-drops] Off (config.txt: enabled=false)")
 end
