@@ -30,7 +30,10 @@ function world(s: string, id = "w1", name = "CopyWithGabe", fr = FR): WorldView 
 }
 
 function update(u: string): UiState["update"] {
-  const changes = ["Voo: volta a funcionar depois do pulo em água", "Básicos: opção de esconder a barra de stamina", "App: aviso quando seu amigo começa a hospedar"];
+  const changes = [
+    { version: "0.4.3", items: ["**Voo:** volta a funcionar depois do pulo em água", "**Básicos:** opção de esconder a barra de stamina"] },
+    { version: "0.4.2", items: ["App: aviso quando seu amigo começa a hospedar"] },
+  ];
   const upd = (label: string, cls: string, disabled = false) => ({ label, kind: "update" as const, icon: null, cls, disabled });
   const appVersion = "0.1.0";
   if (u === "avail") return { state: "avail", name: "Versão 0.4.3 disponível", sub: "Você está na 0.4.2 · 3,4 MB", action: upd("Atualizar", "primary"), progress: null, changes, badge: true, appVersion };

@@ -105,7 +105,8 @@ fn step(app: &AppHandle) {
     if due && matches!(phase, Phase::Idle | Phase::Available(_)) {
         set_phase(app, Phase::Checking);
         let started = std::time::Instant::now();
-        let r = updater::fetch_latest(PRODUCT_KEY.trim());
+        let installed = u.inner.lock().unwrap().saved.mods_version.clone();
+        let r = updater::fetch_latest(PRODUCT_KEY.trim(), installed.as_deref());
         // a check takes a blink: keep "Verificando…" on screen long enough to be seen
         if let Some(rest) = Duration::from_millis(800).checked_sub(started.elapsed()) {
             std::thread::sleep(rest);

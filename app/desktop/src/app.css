@@ -280,7 +280,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .footline { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); flex: none; }
 .footline .link { border: 0; background: transparent; color: var(--brand); font-weight: 600; padding: 0; font-size: 12.5px; }
 .changelog { padding: 4px 16px 14px 60px; display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.changelog ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 .changelog li { margin: 0; }
+.changelog li b { color: var(--ink); font-weight: 600; }
+.changelog .ver { margin-top: 6px; font-weight: 600; color: var(--ink); }
+.changelog .ver:first-child { margin-top: 0; }
 
 /* ---------- first run ---------- */
 .fr { flex: 1; min-height: 0; overflow-y: auto; padding: 26px 40px 30px; display: grid; gap: 18px; align-content: start; }

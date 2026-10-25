@@ -15,7 +15,11 @@
   const u = $derived(s.update);
   const avail = $derived(u.state === "avail" || u.state === "blocked");
   const worlds = $derived(s.sync?.worlds ?? []);
+  // the notes' **bold**: every other piece between the stars
+  const pieces = (line: string) => line.split("**");
 </script>
+
+{#snippet note(line: string)}{#each pieces(line) as p, i}{#if i % 2}<b>{p}</b>{:else}{p}{/if}{/each}{/snippet}
 
 <div class="sec">
   <div class="card upd-wrap" class:avail style={avail ? "border-color:var(--brand)" : ""}>
@@ -29,7 +33,12 @@
       {#if u.action}<Btn action={u.action} {busy} onclick={onupdate} />{/if}
     </div>
     {#if u.state !== "ok" && u.changes.length}
-      <ul class="changelog">{#each u.changes as c}<li>{c}</li>{/each}</ul>
+      <div class="changelog">
+        {#each u.changes as group}
+          {#if u.changes.length > 1}<div class="ver">Versão {group.version}</div>{/if}
+          <ul>{#each group.items as c}<li>{@render note(c)}</li>{/each}</ul>
+        {/each}
+      </div>
     {/if}
   </div>
 </div>

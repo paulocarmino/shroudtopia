@@ -21,6 +21,8 @@ use crate::format;
 use crate::signature::{self, Manifest, SignedFile, EXE_ASSET, MANIFEST_ASSET, MODS_ASSET};
 
 pub const LATEST_URL: &str = "https://api.github.com/repos/paulocarmino/shroudtopia/releases/latest";
+/// the recent releases, for the notes of the versions an update skips
+pub const RELEASES_URL: &str = "https://api.github.com/repos/paulocarmino/shroudtopia/releases?per_page=30";
 pub const PARTIAL_NAME: &str = "Shroudtopia.exe.partial";
 pub const OLD_NAME: &str = "Shroudtopia.old.exe";
 pub const AFTER_UPDATE: &str = "--after-update";
@@ -42,6 +44,17 @@ pub struct GhRelease {
     pub body: Option<String>,
     #[serde(default)]
     pub assets: Vec<GhAsset>,
+    #[serde(default)]
+    pub draft: bool,
+    #[serde(default)]
+    pub prerelease: bool,
+}
+
+/// One version's release notes (its bullet lines).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Changes {
+    pub version: String,
+    pub items: Vec<String>,
 }
 
 /// A release that verified: what it installs and where to get it.
@@ -50,8 +63,8 @@ pub struct Offer {
     pub manifest: Manifest,
     pub mods_url: String,
     pub exe_url: String,
-    /// the release notes' bullet lines, for the changelog under the card
-    pub changes: Vec<String>,
+    /// the release notes of this version and of the ones between it and what is installed, newest first
+    pub changes: Vec<Changes>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -73,15 +86,32 @@ pub fn offer(gh: &GhRelease, manifest_json: &str, key: &str) -> Result<Offer, St
         return Err("a versão assinada não é a do release".into());
     }
     let url = |name: &str| gh.assets.iter().find(|a| a.name == name).map(|a| a.browser_download_url.clone()).ok_or(format!("o release não tem {name}"));
-    Ok(Offer { mods_url: url(MODS_ASSET)?, exe_url: url(EXE_ASSET)?, changes: changes(gh.body.as_deref().unwrap_or("")), manifest })
+    let notes = Changes { version: manifest.version.clone(), items: changes(gh.body.as_deref().unwrap_or("")) };
+    Ok(Offer { mods_url: url(MODS_ASSET)?, exe_url: url(EXE_ASSET)?, changes: vec![notes].into_iter().filter(|c| !c.items.is_empty()).collect(), manifest })
+}
+
+/// Adds the notes of the published releases newer than `installed` and older than the offer, so an update that skips
+/// versions still tells what each of them brought.
+pub fn add_skipped(offer: &mut Offer, releases: &[GhRelease], installed: &str) {
+    for r in releases.iter().filter(|r| !r.draft && !r.prerelease) {
+        let v = r.tag_name.trim_start_matches('v');
+        if signature::newer(v, installed) && signature::newer(&offer.manifest.version, v) {
+            let items = changes(r.body.as_deref().unwrap_or(""));
+            if !items.is_empty() && !offer.changes.iter().any(|c| c.version == v) {
+                offer.changes.push(Changes { version: v.into(), items });
+            }
+        }
+    }
+    offer.changes.sort_by(|a, b| if signature::newer(&a.version, &b.version) { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater });
 }
 
 fn agent() -> ureq::Agent {
     ureq::AgentBuilder::new().timeout_connect(Duration::from_secs(10)).timeout_read(Duration::from_secs(120)).user_agent(&format!("Shroudtopia/{}", crate::APP_VERSION)).build()
 }
 
-/// The latest release, verified; `None` when the repository has none yet (GitHub's 404).
-pub fn fetch_latest(key: &str) -> Result<Option<Offer>, String> {
+/// The latest release, verified, with the notes of the versions since `installed`; `None` when the repository has
+/// none yet (GitHub's 404).
+pub fn fetch_latest(key: &str, installed: Option<&str>) -> Result<Option<Offer>, String> {
     let agent = agent();
     let gh: GhRelease = match agent.get(LATEST_URL).set("Accept", "application/vnd.github+json").call() {
         Ok(r) => r.into_json().map_err(|e| format!("resposta estranha do GitHub: {e}"))?,
@@ -91,7 +121,14 @@ pub fn fetch_latest(key: &str) -> Result<Option<Offer>, String> {
     };
     let manifest_url = gh.assets.iter().find(|a| a.name == MANIFEST_ASSET).map(|a| a.browser_download_url.clone()).ok_or("o release não tem a assinatura")?;
     let text = agent.get(&manifest_url).call().map_err(|e| format!("não deu para baixar a assinatura ({e})"))?.into_string().map_err(|e| e.to_string())?;
-    offer(&gh, &text, key).map(Some)
+    let mut found = offer(&gh, &text, key)?;
+    // the skipped versions' notes are a nicety: without them the latest's notes still show
+    if let Some(installed) = installed {
+        if let Ok(list) = agent.get(RELEASES_URL).set("Accept", "application/vnd.github+json").call().map_err(|_| ()).and_then(|r| r.into_json::<Vec<GhRelease>>().map_err(|_| ())) {
+            add_skipped(&mut found, &list, installed);
+        }
+    }
+    Ok(Some(found))
 }
 
 /// Reads `body` into `dest`, hashing it as it comes; kept only when it is the signed file's very size and sha256
@@ -273,7 +310,7 @@ pub struct UpdateView {
     pub sub: String,
     pub action: Option<crate::view::Action>,
     pub progress: Option<crate::view::ProgressView>,
-    pub changes: Vec<String>,
+    pub changes: Vec<Changes>,
     pub badge: bool,
     pub app_version: String,
 }
@@ -389,7 +426,7 @@ mod tests {
 
     fn gh(version: &str, body: &str) -> GhRelease {
         let a = |n: &str| GhAsset { name: n.into(), browser_download_url: format!("https://github.com/x/{n}"), size: 1 };
-        GhRelease { tag_name: format!("v{version}"), body: Some(body.into()), assets: vec![a(EXE_ASSET), a(MODS_ASSET), a(MANIFEST_ASSET)] }
+        GhRelease { tag_name: format!("v{version}"), body: Some(body.into()), assets: vec![a(EXE_ASSET), a(MODS_ASSET), a(MANIFEST_ASSET)], draft: false, prerelease: false }
     }
 
     fn manifest_json(version: &str, exe: &[u8], mods: &[u8]) -> String {
@@ -403,7 +440,14 @@ mod tests {
         let m = manifest_json("0.4.3", b"MZ app", &mods);
         let o = offer(&gh("0.4.3", "Notas\n- Voo: volta a funcionar\n* Básicos: opção nova\n"), &m, &test_key()).unwrap();
         assert_eq!(o.manifest.version, "0.4.3");
-        assert_eq!(o.changes, ["Voo: volta a funcionar", "Básicos: opção nova"]);
+        assert_eq!(o.changes, [Changes { version: "0.4.3".into(), items: vec!["Voo: volta a funcionar".into(), "Básicos: opção nova".into()] }]);
+        // installed 0.4.0: the notes of 0.4.1 and 0.4.2 come too, newest first; 0.4.0, a draft and a newer one do not
+        let mut o2 = o.clone();
+        let mut draft = gh("0.4.2", "- rascunho");
+        draft.draft = true;
+        add_skipped(&mut o2, &[gh("0.4.4", "- futura"), gh("0.4.1", "- um"), draft, gh("0.4.2", "- dois"), gh("0.4.0", "- zero"), gh("0.4.3", "- repetida")], "0.4.0");
+        assert_eq!(o2.changes.iter().map(|c| c.version.as_str()).collect::<Vec<_>>(), ["0.4.3", "0.4.2", "0.4.1"]);
+        assert_eq!(o2.changes[1].items, ["dois"]);
         assert!(offer(&gh("0.4.4", ""), &m, &test_key()).is_err(), "the tag must be the signed version");
         assert!(offer(&gh("0.4.3", ""), &m, crate::signature::PRODUCT_KEY).is_err(), "another key");
         assert!(offer(&gh("0.4.3", ""), "{}", &test_key()).is_err());
