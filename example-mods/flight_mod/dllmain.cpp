@@ -18,6 +18,7 @@ ModMetaData metaData = {
 class FlightMod : public Mod
 {
     Mem::Detour* mod = nullptr;
+    Mem::Patch* gamepadPitch = nullptr;
 public:
     void Load(ModContext* modContext)
     {
@@ -37,11 +38,30 @@ public:
             mod = new Mem::Detour(address, modCode, sizeof(modCode), false, 3);
             mod->shellcode->updateValue<uint32_t>(9, (uint32_t)(mod->patch->data->address + mod->patch->data->size) - ((uint32_t)((uintptr_t)mod->shellcode->data->address + mod->shellcode->data->size - 4)));
         }
+
+        // Glider pitch has two control modes (a byte on the controller): 0 adds pitch speed * input * dt to the
+        // current pitch, so it stays where you leave it (mouse); 1 sets pitch = input * pi/2, so it falls back the
+        // moment the stick is centred (gamepad), and a gamepad player has to hold the stick to keep climbing.
+        // Send mode 1 down the mode 0 path: test al,al; je incremental; cmp ecx,1; jne ..; [movd xmm8,edx -> jmp].
+        const char* pitchPattern = "\x84\xC0\x74\x00\x83\xF9\x01\x75\x00\x66\x44\x0F\x6E\xC2\xF3\x44\x0F\x59\x05\x00\x00\x00\x00\xEB\x00\xF3\x44\x0F\x10\x87";
+        const char* pitchMask = "xxx?xxxx?xxxxxxxxxx????x?xxxxx";
+        uintptr_t pitch = Mem::FindPattern(pitchPattern, pitchMask, baseAddress, 0x1000000);
+        if (pitch)
+        {
+            const uintptr_t incremental = pitch + 4 + *reinterpret_cast<const int8_t*>(pitch + 3);
+            uint8_t jmp[] = { 0xEB, (uint8_t)(int8_t)(incremental - (pitch + 9 + 2)) };
+            gamepadPitch = new Mem::Patch(pitch + 9, jmp, sizeof(jmp));
+        }
+        else
+        {
+            modContext->Log("Flight Mod: gamepad pitch pattern not found, gamepad keeps absolute pitch");
+        }
     }
 
     void Unload(ModContext* modContext) {
         delete mod;
         mod = nullptr;
+        if (gamepadPitch) { gamepadPitch->undo(); delete gamepadPitch; gamepadPitch = nullptr; }
     }
 
     void Activate(ModContext* modContext) {
@@ -50,11 +70,14 @@ public:
             return;
         }
         active = mod->activate();
+        if (gamepadPitch && gamepadPitch->apply())
+            modContext->Log("Flight Mod: gamepad pitch now holds like the mouse");
         modContext->Log(std::string().append(metaData.name).append(" activated").c_str());
     }
 
     void Deactivate(ModContext* modContext) {
         if (mod) mod->deactivate();
+        if (gamepadPitch) gamepadPitch->undo();
         active = false;
         modContext->Log(std::string().append(metaData.name).append(" deactivated").c_str());
     }
