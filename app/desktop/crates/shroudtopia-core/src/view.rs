@@ -110,6 +110,8 @@ pub struct Snapshot {
     pub phase: String,
     pub player: Option<Person>,
     pub game_running: bool,
+    /// Engine::syncing: the updater waits for it to be false before it installs
+    pub syncing: bool,
     pub online: bool,
     /// one card per shared world, in the order they were added
     pub worlds: Vec<WorldView>,
@@ -279,6 +281,7 @@ pub fn snapshot(e: &mut Engine) -> Snapshot {
         },
         player: me_person,
         game_running: e.rt.game_running,
+        syncing: e.syncing(),
         online: e.rt.online,
         worlds,
         people,

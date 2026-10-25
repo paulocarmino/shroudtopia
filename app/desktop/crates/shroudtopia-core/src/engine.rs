@@ -571,6 +571,11 @@ impl Engine {
         sync_state::derive(&self.inputs())
     }
 
+    /// A save is going up or down, or the slot changed and is about to go up: the app must not restart now.
+    pub fn syncing(&self) -> bool {
+        self.rt.transfer != Transfer::Idle || self.rt.dirty || self.rt.stable_since.is_some()
+    }
+
     pub fn snapshot(&mut self) -> Snapshot {
         view::snapshot(self)
     }

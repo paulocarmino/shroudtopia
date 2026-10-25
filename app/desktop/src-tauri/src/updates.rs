@@ -1,6 +1,7 @@
-//! The updater's thread: looks at GitHub's latest release at most hourly (or on "Verificar"), downloads and checks
-//! it on "Atualizar", installs the mods only while the game is closed (else "Jogo aberto": it installs by itself when
-//! the game closes), then swaps the app's own `.exe` when the release has a newer one and restarts.
+//! The updater's thread: looks at GitHub's latest release at start, hourly and on "Verificar" (game open or not),
+//! downloads and checks it on "Atualizar" and installs the mods only while the game is closed (else it waits in line
+//! and installs by itself as soon as the game closes), then swaps the app's own `.exe` when the release has a newer
+//! one and restarts.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -46,9 +47,9 @@ impl Updates {
     pub fn new(data_dir: &Path) -> Updates {
         let file = data_dir.join("updates.json");
         let saved: Saved = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-        // mods from an older layout: look now rather than in up to an hour (right after an update from 0.1.5 or older)
-        let check_now = saved.mods_version.is_some() && saved.mods_layout < updater::MODS_LAYOUT;
-        Updates { file, inner: Mutex::new(Inner { saved, check_now, ..Default::default() }) }
+        // look at every start: what a check found lives only in memory, so an app reopened within the hour said
+        // "Tudo atualizado" over a release it had already seen
+        Updates { file, inner: Mutex::new(Inner { saved, check_now: true, ..Default::default() }) }
     }
 
     fn save(&self, inner: &Inner) {
@@ -90,9 +91,10 @@ fn set_phase(app: &AppHandle, phase: Phase) {
 fn step(app: &AppHandle) {
     let shared = app.state::<Shared>();
     let u = &shared.updates;
-    // nothing below runs with the game open, nor in the minute after it closes (process::game_settled): a friend's PC
-    // froze on 2026-10-21 with the game and an update together. The check is made again right before each step.
-    let settled = shroudtopia_win::process::game_settled();
+    // the check is a small request and runs any time; the download and the install wait for the game to be closed
+    // (a friend's PC froze on 2026-10-21 with the game and an update together) and for no save to be on its way
+    // (the install may restart the app). Looked at again before each step.
+    let closed = free(app);
     let (due, apply, phase) = {
         let mut i = u.inner.lock().unwrap();
         let due = i.check_now || (matches!(i.phase, Phase::Idle) && i.saved.last_check.is_none_or(|t| Utc::now() - t >= updater::CHECK_EVERY || Utc::now() < t));
@@ -100,15 +102,7 @@ fn step(app: &AppHandle) {
         let apply = std::mem::take(&mut i.apply_now);
         (due, apply, i.phase.clone())
     };
-    if due && !settled {
-        // looked at again once the game has been closed a while; the card says so instead of ignoring the click
-        u.inner.lock().unwrap().check_now = true;
-        if matches!(phase, Phase::Idle) {
-            set_phase(app, Phase::Waiting);
-        }
-        return;
-    }
-    if due && matches!(phase, Phase::Idle | Phase::Waiting | Phase::Available(_)) {
+    if due && matches!(phase, Phase::Idle | Phase::Available(_)) {
         set_phase(app, Phase::Checking);
         let started = std::time::Instant::now();
         let r = updater::fetch_latest(PRODUCT_KEY.trim());
@@ -141,8 +135,8 @@ fn step(app: &AppHandle) {
     }
     let queued = matches!(phase, Phase::Queued(_));
     match phase {
-        Phase::Available(offer) if apply && !settled => set_phase(app, Phase::Queued(offer)),
-        Phase::Available(offer) | Phase::Queued(offer) if (apply || queued) && settled => {
+        Phase::Available(offer) if apply && !closed => set_phase(app, Phase::Queued(offer)),
+        Phase::Available(offer) | Phase::Queued(offer) if (apply || queued) && closed => {
             if let Err(e) = download(app, &offer) {
                 let mut i = u.inner.lock().unwrap();
                 i.error = Some(e);
@@ -152,13 +146,19 @@ fn step(app: &AppHandle) {
                 return;
             }
             set_phase(app, Phase::Ready(offer.clone()));
-            if shroudtopia_win::process::game_settled() {
+            if free(app) {
                 install(app, &offer);
             }
         }
-        Phase::Ready(offer) if settled => install(app, &offer),
+        Phase::Ready(offer) if closed => install(app, &offer),
         _ => {}
     }
+}
+
+/// The game is closed and no save is going up or down.
+fn free(app: &AppHandle) -> bool {
+    let syncing = app.state::<Shared>().snapshot.lock().unwrap().as_ref().is_some_and(|s| s.syncing);
+    !syncing && !shroudtopia_win::process::game_running()
 }
 
 fn download(app: &AppHandle, offer: &Offer) -> Result<(), String> {
@@ -190,7 +190,7 @@ fn download(app: &AppHandle, offer: &Offer) -> Result<(), String> {
 fn install(app: &AppHandle, offer: &Offer) {
     let shared = app.state::<Shared>();
     // the last look before the game folder is written: the game may have opened during the download
-    if !shroudtopia_win::process::game_settled() {
+    if !free(app) {
         set_phase(app, Phase::Ready(Box::new(offer.clone())));
         return;
     }

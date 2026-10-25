@@ -252,8 +252,6 @@ pub fn remove_old(dir: &Path, attempts: u32) -> bool {
 pub enum Phase {
     #[default]
     Idle,
-    /// a check is due (asked for, or the hourly one) but the game is open or closed less than a minute ago
-    Waiting,
     Checking,
     /// a newer release that verified
     Available(Box<Offer>),
@@ -312,7 +310,7 @@ pub fn view(phase: &Phase, installed: Option<&str>, checked: Option<DateTime<Utc
         Phase::Queued(o) => UpdateView {
             state: "blocked".into(),
             name: format!("Versão {} na fila", o.manifest.version),
-            sub: "Nada é baixado nem instalado com o Enshrouded aberto. Instala sozinho um minuto depois que ele fechar.".into(),
+            sub: "Nada é baixado nem instalado com o Enshrouded aberto. Instala sozinho assim que ele fechar e o save terminar de subir.".into(),
             action: act("Atualizar", "primary", true),
             progress: None,
             changes: o.changes.clone(),
@@ -322,7 +320,7 @@ pub fn view(phase: &Phase, installed: Option<&str>, checked: Option<DateTime<Utc
         Phase::Ready(o) => UpdateView {
             state: "blocked".into(),
             name: format!("Versão {} pronta", o.manifest.version),
-            sub: "Instala sozinho um minuto depois que o Enshrouded fechar.".into(),
+            sub: "Instala sozinho assim que o Enshrouded fechar e o save terminar de subir.".into(),
             action: act("Atualizar", "primary", true),
             progress: None,
             changes: o.changes.clone(),
@@ -340,20 +338,18 @@ pub fn view(phase: &Phase, installed: Option<&str>, checked: Option<DateTime<Utc
             app_version,
         },
         Phase::Restarting => UpdateView { state: "installing".into(), name: "Reiniciando o app".into(), sub: String::new(), action: None, progress: Some(crate::view::ProgressView { pct: 100, text: "Abrindo a versão nova".into() }), changes: vec![], badge: false, app_version },
-        Phase::Idle | Phase::Waiting | Phase::Checking => UpdateView {
+        Phase::Idle | Phase::Checking => UpdateView {
             state: "ok".into(),
             name: mods,
             sub: match (phase, error, checked) {
                 (Phase::Checking, _, _) => "Verificando…".into(),
-                (Phase::Waiting, _, _) if game_running => "Verifica quando o Enshrouded fechar: nada é buscado com o jogo aberto".into(),
-                (Phase::Waiting, _, _) => "Verifica em instantes: o Enshrouded fechou há menos de um minuto".into(),
                 (_, None, Some(t)) if !none_published && (now - t).num_seconds() < 60 => "Tudo atualizado · verificado agora".into(),
                 (_, Some(e), _) => format!("Não deu para verificar: {e}"),
                 (_, None, Some(t)) if none_published => format!("Nenhuma versão publicada ainda · verificado {}", format::day_time(t, now, off)),
                 (_, None, Some(t)) => format!("Tudo atualizado · verificado {}", format::day_time(t, now, off)),
                 (_, None, None) => "Ainda não verificado".into(),
             },
-            action: act("Verificar", "", matches!(phase, Phase::Checking | Phase::Waiting)),
+            action: act("Verificar", "", matches!(phase, Phase::Checking)),
             progress: None,
             changes: vec![],
             badge: false,
@@ -483,7 +479,7 @@ mod tests {
         assert_eq!((v.state.as_str(), v.name.as_str()), ("avail", "Versão 0.4.3 disponível"));
         assert!(v.sub.starts_with("Você está na 0.4.2 · "));
         let v = view(&Phase::Ready(o.clone()), Some("0.4.2"), None, None, false, true, now, off);
-        assert_eq!((v.state.as_str(), v.name.as_str(), v.sub.as_str()), ("blocked", "Versão 0.4.3 pronta", "Instala sozinho um minuto depois que o Enshrouded fechar."));
+        assert_eq!((v.state.as_str(), v.name.as_str(), v.sub.as_str()), ("blocked", "Versão 0.4.3 pronta", "Instala sozinho assim que o Enshrouded fechar e o save terminar de subir."));
         assert!(v.action.unwrap().disabled);
         // clicked with the game open: queued, nothing downloaded, the button stays off
         let v = view(&Phase::Queued(o.clone()), Some("0.4.2"), None, None, false, true, now, off);
@@ -497,10 +493,5 @@ mod tests {
         assert_eq!(v.action.unwrap().label, "Verificar");
         let v = view(&Phase::Idle, Some("0.4.2"), Some(now - chrono::Duration::minutes(5)), None, false, false, now, off);
         assert!(v.sub.starts_with("Tudo atualizado · verificado hoje, "));
-        let v = view(&Phase::Waiting, Some("0.4.2"), Some(now), None, false, true, now, off);
-        assert!(v.sub.starts_with("Verifica quando o Enshrouded fechar"));
-        assert!(v.action.unwrap().disabled);
-        let v = view(&Phase::Waiting, Some("0.4.2"), Some(now), None, false, false, now, off);
-        assert!(v.sub.starts_with("Verifica em instantes"));
     }
 }
