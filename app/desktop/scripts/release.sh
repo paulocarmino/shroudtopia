@@ -10,12 +10,12 @@
 #
 #   bash app/desktop/scripts/release.sh <version> --dlls <folder> [--exe <Shroudtopia.exe>] [--notes <file>]
 #       <folder> has the loader and the mods as MSBuild left them (build.bat: build/x64): shroudtopia.dll, winmm.dll,
-#       the mods' DLLs (basics_mod.dll, flight_mod.dll, first_person_view.dll) and minimap_mod.dll, at its top or
+#       the mods' DLLs (basics_mod.dll, flight_mod.dll, first_person_view.dll, loot_filter.dll) and minimap_mod.dll, at its top or
 #       under mods/ (scripts/mods_zip.py adds the minimap's data, EML, Max Stack and Twitch Drops).
 #       --exe defaults to app/desktop/dist/Shroudtopia.exe (scripts/build.sh). Writes app/desktop/release/<version>/:
 #         shroudtopia-mods.zip         v1: shroudtopia.dll + winmm.dll + mods/*.dll, for apps up to 0.1.5
 #         shroudtopia-release.json     v1 manifest { payload, signature }, signed with the private key
-#         shroudtopia-mods-v2.zip      v2: v1 + dbghelp.dll (EML) + mods/minimap_mod/ + mods/max-stack/ + mods/twitch-drops/
+#         shroudtopia-mods-v2.zip      v2: v1 + mods/loot_filter.dll + dbghelp.dll (EML) + mods/minimap_mod/ + mods/max-stack/ + mods/twitch-drops/
 #         shroudtopia-release-v2.json  v2 manifest (signature.rs), what this app reads
 #         Shroudtopia.exe
 #         Shroudtopia.zip              the exe zipped, for the landing page's download button

@@ -1,7 +1,7 @@
 """Packs the mods zips release.sh signs (signature.rs explains the two layouts):
 
   v1  shroudtopia-mods.zip     shroudtopia.dll + winmm.dll + mods/<name>.dll: what apps up to 0.1.5 accept, nothing more
-  v2  shroudtopia-mods-v2.zip  v1 + EML's dbghelp.dll (eml-mods/eml.lock) + mods/minimap_mod/ + mods/max-stack/ + mods/twitch-drops/
+  v2  shroudtopia-mods-v2.zip  v1 + mods/loot_filter.dll + EML's dbghelp.dll (eml-mods/eml.lock) + mods/minimap_mod/ + mods/max-stack/ + mods/twitch-drops/
 
     python scripts/mods_zip.py --dlls <folder> [--v1 <zip>] [--v2 <zip>] [--install <game folder>]
 
@@ -26,6 +26,8 @@ import zipfile
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 LOADER = ["shroudtopia.dll", "winmm.dll"]
 MODS = ["basics_mod.dll", "flight_mod.dll", "first_person_view.dll"]
+# mods newer than the v1 package, which stays what apps up to 0.1.5 knew
+V2_MODS = ["loot_filter.dll"]
 MINIMAP_ASSETS = os.path.join(REPO, "third-party", "Enshrouded-minimap", "assets")
 EML_MODS = os.path.join(REPO, "eml-mods")
 EML_LOCK = os.path.join(EML_MODS, "eml.lock")
@@ -87,7 +89,7 @@ def v1_files(dlls):
 
 
 def v2_files(dlls):
-    files = v1_files(dlls) + [(eml_dll(), "dbghelp.dll")]
+    files = v1_files(dlls) + [(find(dlls, n, "mods"), "mods/" + n) for n in V2_MODS] + [(eml_dll(), "dbghelp.dll")]
     if not os.path.isfile(os.path.join(MINIMAP_ASSETS, "mod.json")):
         stop("third-party/Enshrouded-minimap is empty: git submodule update --init third-party/Enshrouded-minimap")
     files.append((find(dlls, "minimap_mod.dll", "mods", os.path.join("mods", "minimap_mod")), "mods/minimap_mod/minimap_mod.dll"))
