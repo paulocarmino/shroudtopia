@@ -12,8 +12,8 @@
     ["AnimalFood", "Comida de animal"], ["Instrument", "Instrumentos"], ["FishingRod", "Varas de pesca"],
   ];
 
-  let { mode, ids, disabled = false, onmode, onitems }: {
-    mode: string; ids: number[]; disabled?: boolean; onmode: (mode: string) => void; onitems: (ids: number[]) => void;
+  let { mode, ids, disabled = false, tall = false, onmode, onitems }: {
+    mode: string; ids: number[]; disabled?: boolean; tall?: boolean; onmode: (mode: string) => void; onitems: (ids: number[]) => void;
   } = $props();
 
   // the window's copy, so a click shows at once; the file's list replaces it when it changes
@@ -48,7 +48,7 @@
   }
 </script>
 
-<div class="loot" class:off={disabled}>
+<div class="loot" class:off={disabled} class:tall>
   <div class="loot-mode" role="radiogroup" aria-label="Modo do filtro">
     <button role="radio" aria-checked={mode === "deny"} onclick={() => onmode("deny")}>
       <span class="t">Pegar tudo, menos os marcados</span><span class="s">os marcados ficam no chão</span>
@@ -89,6 +89,7 @@
 <style>
   .loot { padding: 2px 16px 14px; display: grid; gap: 10px; }
   .loot.off { opacity: .5; }
+  .loot.tall .loot-grid { max-height: calc(100vh - 330px); min-height: 220px; }
   .loot-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .loot-mode button { text-align: left; border: 1px solid var(--border); background: var(--bg); border-radius: var(--radius-sm); padding: 8px 12px; display: grid; gap: 1px; }
   .loot-mode button:hover { border-color: var(--muted); }

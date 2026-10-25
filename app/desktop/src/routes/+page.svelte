@@ -5,12 +5,13 @@
   import { api, onState, windowAction, IS_TAURI, type UiState } from "$lib/api";
   import WorldCard from "$lib/WorldCard.svelte";
   import Mods from "$lib/Mods.svelte";
+  import LootTab from "$lib/LootTab.svelte";
   import Update from "$lib/Update.svelte";
   import FirstRun from "$lib/FirstRun.svelte";
   import Note from "$lib/Note.svelte";
 
   let s = $state<UiState | null>(null);
-  let tab = $state<"world" | "mods" | "update">("world");
+  let tab = $state<"world" | "mods" | "loot" | "update">("world");
   let busy = $state(false);
   let error = $state<string | null>(null);
   /** what "Entrar pelo Steam" says when Steam did not start the game by itself */
@@ -110,6 +111,7 @@
         {@render brand()}
         <button class="nav" role="tab" aria-selected={tab === "world"} onclick={() => (tab = "world")}>{@html ICON.globe}Mundo{#if attention}<span class="badge" style="background:var(--warn)">!</span>{/if}</button>
         <button class="nav" role="tab" aria-selected={tab === "mods"} onclick={() => (tab = "mods")}>{@html ICON.puzzle}Mods</button>
+        <button class="nav" role="tab" aria-selected={tab === "loot"} onclick={() => (tab = "loot")}>{@html ICON.bag}Filtro de saque</button>
         <button class="nav" role="tab" aria-selected={tab === "update"} onclick={() => (tab = "update")}>{@html ICON.download}Atualização{#if updBadge}<span class="badge">1</span>{/if}</button>
         {#if sync?.people.length}
           <div class="rail-foot">
@@ -171,8 +173,10 @@
           {:else if tab === "mods"}
             <div class="sec">
               <div class="sec-title"><h2>Mods</h2><span class="aside">muda na hora, mesmo com o jogo aberto</span></div>
-              <Mods mods={s.mods.items} error={s.mods.error} onset={(m, k, v) => act(() => api.setMod(m, k, v))} />
+              <Mods mods={s.mods.items.filter((m) => !m.panel)} error={s.mods.error} onset={(m, k, v) => act(() => api.setMod(m, k, v))} />
             </div>
+          {:else if tab === "loot"}
+            <LootTab mod={s.mods.items.find((m) => m.panel?.kind === "loot") ?? null} error={s.mods.error} onset={(k, v) => act(() => api.setMod("loot_filter", k, v))} />
           {:else}
             <Update
               {s}
