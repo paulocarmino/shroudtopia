@@ -69,6 +69,8 @@ pub trait Api: Send {
     fn list_worlds(&self) -> ApiResult<Vec<World>>;
     fn create_world(&self, name: &str) -> ApiResult<World>;
     fn get_world(&self, id: &str) -> ApiResult<World>;
+    /// `DELETE /api/worlds/:id`: gone for every member
+    fn delete_world(&self, id: &str) -> ApiResult<()>;
     fn create_invite(&self, id: &str) -> ApiResult<Invite>;
     fn redeem(&self, code: &str) -> ApiResult<World>;
     fn upload(&self, id: &str, bytes: &[u8], headers: &UploadHeaders, progress: Progress) -> ApiResult<UploadResponse>;
@@ -239,6 +241,10 @@ impl Api for HttpApi {
 
     fn release(&self, id: &str) -> ApiResult<()> {
         Self::check(self.req("DELETE", &format!("/api/worlds/{}/lock", enc(id))).call()).map(|_| ())
+    }
+
+    fn delete_world(&self, id: &str) -> ApiResult<()> {
+        Self::check(self.req("DELETE", &format!("/api/worlds/{}", enc(id))).call()).map(|_| ())
     }
 
     fn resolve(&self, id: &str, version: &str) -> ApiResult<World> {

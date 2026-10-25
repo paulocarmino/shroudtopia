@@ -95,6 +95,11 @@ impl FakeServer {
         Self::view(&s, id)
     }
 
+    pub fn try_world(&self, id: &str) -> Option<World> {
+        let s = self.state.lock().unwrap();
+        s.worlds.contains_key(id).then(|| Self::view(&s, id))
+    }
+
     pub fn file(&self, id: &str, version: &str) -> Vec<u8> {
         self.state.lock().unwrap().worlds[id].files[version].clone()
     }
@@ -134,9 +139,10 @@ impl FakeClient {
 
     fn member(s: &State, id: &str, me: &Option<Player>) -> ApiResult<Player> {
         let me = me.clone().ok_or_else(|| http(401, "unauthorized"))?;
-        let rec = s.worlds.get(id).ok_or_else(|| http(404, "not_found"))?;
+        // as the server: a world that is gone and one the caller is not a member of look the same
+        let rec = s.worlds.get(id).ok_or_else(|| http(404, "world_not_found"))?;
         if !rec.world.members.iter().any(|m| m.steam_id == me.steam_id) {
-            return Err(http(403, "forbidden"));
+            return Err(http(404, "world_not_found"));
         }
         Ok(me)
     }
@@ -229,6 +235,18 @@ impl Api for FakeClient {
         self.with(|s, me| {
             Self::member(s, id, &me)?;
             Ok(FakeServer::view(s, id))
+        })
+    }
+
+    fn delete_world(&self, id: &str) -> ApiResult<()> {
+        self.with(|s, me| {
+            let me = Self::member(s, id, &me)?;
+            let now = FakeServer::now(s);
+            if s.worlds[id].world.lock.as_ref().is_some_and(|l| l.expires_at > now && l.holder != me.steam_id) {
+                return Err(http(409, "lock_held"));
+            }
+            s.worlds.remove(id);
+            Ok(())
         })
     }
 

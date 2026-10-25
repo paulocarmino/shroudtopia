@@ -652,3 +652,35 @@ fn a_single_world_config_keeps_working_and_grows() {
     assert_eq!(saved["worlds"][0]["worldId"], a.as_str());
     assert!(saved.get("world").is_none());
 }
+
+#[test]
+fn deleting_a_world_removes_it_for_everyone_and_keeps_the_saves() {
+    let mut w = World2::new();
+    let id = w.me.e.cfg.world.as_ref().unwrap().world_id.clone();
+    // not while the friend hosts it
+    w.at(60);
+    w.tick(false, true);
+    w.fr.write(1, b"friend plays");
+    w.at(60);
+    w.tick(false, true);
+    let refused = w.me.e.delete_world(&id).unwrap_err();
+    assert!(refused.contains("rodrigao_br está jogando"), "{refused}");
+    // nor with my own game open
+    w.at(60);
+    w.tick(true, false);
+    assert!(w.me.e.delete_world(&id).unwrap_err().contains("Feche o Enshrouded"));
+    w.at(60);
+    w.tick(false, false);
+    w.at(400);
+    w.tick(false, false);
+    let (mine, friends) = (w.me.read(0), w.fr.read(1));
+    w.me.e.delete_world(&id).unwrap();
+    assert!(w.me.e.world_ids().is_empty());
+    assert!(w.server.try_world(&id).is_none(), "gone on the server");
+    // the friend's app forgets it at its next look; nobody's save is touched
+    w.at(60);
+    w.tick(false, false);
+    assert!(w.fr.e.world_ids().is_empty());
+    assert_eq!(w.fr.e.rt.error, None);
+    assert_eq!((w.me.read(0), w.fr.read(1)), (mine, friends));
+}

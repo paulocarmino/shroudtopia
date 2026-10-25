@@ -56,6 +56,7 @@ function mockCall(cmd: string, args?: Record<string, unknown>): unknown {
   if (cmd === "get_state") return mock;
   if (cmd === "list_slots") return mockSlots();
   if (cmd === "share" || cmd === "new_invite") return { code: "ENSH-7KQ2", expiresAt: new Date(Date.now() + 864e5).toISOString(), worldId: (args?.world as string) ?? "w1" };
+  if (cmd === "delete_world" && mock.sync) mock.sync.worlds = mock.sync.worlds.filter((w) => w.id !== args?.world);
   if (cmd === "redeem") return { worldId: "w2", name: "Mundo do bang", sub: "de rodrigao_br · 1,8 MB · foi para o espaço world2.ksd", initial: "R" };
   if (cmd === "set_mod" && args) {
     const m = mock.mods.items.find((x) => x.key === args.modKey);
@@ -79,6 +80,7 @@ export const api = {
   slots: () => call<Slots>("list_slots"),
   share: (store: string, slot: number, into: string, name: string) => call<Invite>("share", { store, slot, into, name }),
   newInvite: (world?: string) => call<Invite>("new_invite", { world }),
+  deleteWorld: (world: string) => call<void>("delete_world", { world }),
   redeem: (code: string, into: string) => call<{ worldId: string; name: string; sub: string; initial: string }>("redeem", { code, into }),
   setMod: (modKey: string, key: string, value: unknown) => call<void>("set_mod", { modKey, key, value }),
   updateCheck: () => call<void>("update_check"),

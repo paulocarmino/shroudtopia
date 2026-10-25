@@ -300,6 +300,7 @@ pub fn run() {
             commands::list_slots,
             commands::share,
             commands::new_invite,
+            commands::delete_world,
             commands::redeem,
             commands::set_mod,
             commands::update_check,

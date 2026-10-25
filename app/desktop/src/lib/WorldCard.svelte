@@ -11,10 +11,13 @@
   import ProgressLine from "./ProgressLine.svelte";
   import { onMount } from "svelte";
 
-  let { w, busy, invite = null, onaction, onresolve, oninvite, onclosecode }: {
+  let { w, busy, invite = null, onaction, onresolve, oninvite, onclosecode, ondelete }: {
     w: WorldView; busy: boolean; invite?: { code: string; members: number } | null;
     onaction: (kind: string) => void; onresolve: (keepMine: boolean) => void; oninvite: () => void; onclosecode: () => void;
+    ondelete: () => void;
   } = $props();
+  // the trash asks first, right in the card
+  let confirming = $state(false);
   // someone came in after the code was made (the code is for one person)
   const joined = $derived(!!invite && w.members > invite.members);
   let copied = $state(false);
@@ -51,9 +54,20 @@
   <div class="w2-head">
     <img class="st-medal" src="/art/world-medallion.png" alt="" aria-hidden="true" />
     <div class="txt" title={w.line}><h3>{w.name}</h3><Status tone={w.tone} text={w.status} /><span class="with">{w.with}{#if w.history.length}<span class="sep">·</span><button class="ago" class:open={histOpen} aria-expanded={histOpen} title={histOpen ? "Esconder o histórico" : "Ver o histórico"} onclick={() => (showHist = !histOpen)}>{ago ?? "histórico"}{@html fold}</button>{:else if ago}<span class="sep">·</span>{ago}{/if}</span></div>
-    <button class="btn" title="Um código para um amigo entrar neste mundo" disabled={busy} onclick={oninvite}>{@html ICON.link}Convidar</button>
     {#if w.state !== "diverged" && w.action}<Btn action={w.action} {busy} onclick={() => onaction(w.action!.kind)} />{/if}
+    <button class="btn" title="Um código para um amigo entrar neste mundo" disabled={busy} onclick={oninvite}>{@html ICON.link}Convidar</button>
+    <button class="icon-btn trash" title="Excluir do Shroudtopia" aria-label="Excluir o mundo do Shroudtopia" disabled={busy} onclick={() => (confirming = true)}>{@html ICON.trash}</button>
   </div>
+  {#if confirming}
+    <div class="invite">
+      <div class="txt">
+        <div class="name">Excluir {w.name} do Shroudtopia?</div>
+        <div class="sub">Some para todos que compartilham o mundo e ninguém recebe mais as atualizações dele. O save continua no jogo de cada um.</div>
+      </div>
+      <button class="btn danger-ghost" disabled={busy} onclick={() => { confirming = false; ondelete(); }}>{@html ICON.trash}Excluir</button>
+      <button class="icon-btn" title="Cancelar" aria-label="Cancelar" onclick={() => (confirming = false)}>{@html ICON.close}</button>
+    </div>
+  {/if}
   {#if invite}
     <div class="invite">
       <div class="txt">

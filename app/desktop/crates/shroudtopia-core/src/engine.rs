@@ -117,6 +117,8 @@ pub struct Runtime {
     last_login_poll: Option<DateTime<Utc>>,
     pub mismatch: Option<LoginDone>,
     pub login_error: Option<String>,
+    /// worlds the server no longer has (a member deleted them): forgotten after the tick
+    gone: Vec<String>,
 }
 
 pub struct Engine {
@@ -486,6 +488,8 @@ impl Engine {
                 }
                 self.rt.world = Some(w);
             }
+            // deleted by a member: this PC stops sharing it, the save stays in the game
+            Err(ApiError::Http { code, .. }) if code == "world_not_found" => self.rt.gone.push(id),
             Err(e) if !e.is_offline() => self.rt.error = Some(api_text(&e)),
             Err(_) => {}
         }
@@ -647,6 +651,12 @@ impl Engine {
         self.each_world(|e| e.tick_world(starting, ending));
         if ending {
             self.rt.launched = None;
+        }
+        for id in std::mem::take(&mut self.rt.gone) {
+            if self.select(&id).is_ok() {
+                self.rt.lock_mine = false;
+                self.forget_world();
+            }
         }
     }
 
@@ -1200,9 +1210,35 @@ impl Engine {
         self.release_all();
     }
 
+    /// Deletes the shared world on the server, for every member. On each PC the app only forgets it: the save stays in
+    /// the game (the other members' apps forget it at their next look at the server).
+    pub fn delete_world(&mut self, world_id: &str) -> R<()> {
+        if self.rt.game_running {
+            return Err("Feche o Enshrouded para excluir um mundo.".into());
+        }
+        self.select(world_id)?;
+        match self.call(|a| a.delete_world(world_id)) {
+            // a friend deleted it first
+            Ok(()) => {}
+            Err(ApiError::Http { code, .. }) if code == "world_not_found" => {}
+            Err(ApiError::Http { code, .. }) if code == "lock_held" => {
+                self.fetch();
+                let nick = self.rt.world.as_ref().and_then(|w| w.lock.as_ref()).map(|l| l.nick.clone()).unwrap_or_else(|| "Alguém".into());
+                return Err(format!("{nick} está jogando nesse mundo agora. Exclua quando ele sair."));
+            }
+            Err(e) => return Err(api_text(&e)),
+        }
+        self.rt.lock_mine = false;
+        self.forget_world();
+        Ok(())
+    }
+
     /// Stops sharing on this PC: forgets the world (the save file and the server's copy stay).
     pub fn forget_world(&mut self) {
         self.release();
+        if let Some(p) = self.cfg.world.as_ref().and_then(|w| w.pending.as_ref()) {
+            let _ = fs::remove_file(&p.file);
+        }
         if let Some(id) = self.rt.cur.take() {
             self.cfg.worlds.retain(|w| w.world_id != id);
         }

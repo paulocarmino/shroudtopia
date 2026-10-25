@@ -161,6 +161,7 @@
                   onresolve={(keepMine) => act(() => api.resolve(w.id, keepMine))}
                   oninvite={() => invite(w.id)}
                   onclosecode={() => closeCode(w.id)}
+                  ondelete={() => act(() => api.deleteWorld(w.id))}
                 />
               {/each}
               <div class="more-worlds">

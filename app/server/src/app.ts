@@ -232,7 +232,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
     authed.get('/api/worlds/:id', async request => sync.world(worldParam(request)))
 
-    authed.post('/api/worlds/:id/invites', async request => sync.createInvite(worldParam(request), request.player.steamId))
+    // any member deletes the world for everyone (its versions, files, invites); not while someone else hosts it
+    authed.delete('/api/worlds/:id', async (request, reply) => {
+      const worldId = worldParam(request)
+      const lock = sync.activeLock(worldId)
+      if (lock && lock.holder !== request.player.steamId) throw new SyncError(409, 'lock_held', `${lock.nick} is hosting this world`, { lock })
+      const keys = sync.deleteWorld(worldId)
+      for (const key of keys) await store.delete(key).catch(() => {})
+      return reply.status(204).send()
+    })
+
+    authed.post('/api/worlds/:id/invites',async request => sync.createInvite(worldParam(request), request.player.steamId))
 
     authed.post('/api/invites/redeem', async request => {
       const key = request.token

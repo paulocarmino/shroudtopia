@@ -268,3 +268,26 @@ describe('access', () => {
     expect((await h.app.inject({ method: 'GET', url: `/api/players/${A}/avatar`, headers: bearer(stranger) })).statusCode).toBe(404)
   })
 })
+
+describe('deleting a world', () => {
+  it('any member deletes it for everyone, with its files', async () => {
+    const v1 = (await upload(h.app, tokenA, worldId, Buffer.from('v1'), null)).json().version.versionId
+    const res = await h.app.inject({ method: 'DELETE', url: `/api/worlds/${worldId}`, headers: bearer(tokenB) })
+    expect(res.statusCode).toBe(204)
+    expect(h.store.objects.has(`worlds/${worldId}/${v1}`)).toBe(false)
+    for (const token of [tokenA, tokenB]) {
+      expect((await h.app.inject({ method: 'GET', url: `/api/worlds/${worldId}`, headers: bearer(token) })).statusCode).toBe(404)
+      expect((await h.app.inject({ method: 'GET', url: '/api/worlds', headers: bearer(token) })).json().worlds).toEqual([])
+    }
+  })
+
+  it('a non-member gets 404; someone else hosting is 409; the host may delete', async () => {
+    const tokenC = await device(h, '76561198000000002', 'curioso')
+    expect((await h.app.inject({ method: 'DELETE', url: `/api/worlds/${worldId}`, headers: bearer(tokenC) })).statusCode).toBe(404)
+    await h.app.inject({ method: 'POST', url: `/api/worlds/${worldId}/lock`, headers: bearer(tokenA) })
+    const busy = await h.app.inject({ method: 'DELETE', url: `/api/worlds/${worldId}`, headers: bearer(tokenB) })
+    expect(busy.statusCode).toBe(409)
+    expect(busy.json().error).toBe('lock_held')
+    expect((await h.app.inject({ method: 'DELETE', url: `/api/worlds/${worldId}`, headers: bearer(tokenA) })).statusCode).toBe(204)
+  })
+})

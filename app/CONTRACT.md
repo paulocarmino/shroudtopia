@@ -84,6 +84,7 @@ request/response per route; each side's tests read it, so a change here breaks b
 | GET | `/api/worlds` | | `{ worlds: World[] }` |
 | POST | `/api/worlds` | `{ name }` | `World` |
 | GET | `/api/worlds/:id` | | `World` with `head`, `lock`, `diverged`, `members`, `history` (last 20 versions) |
+| DELETE | `/api/worlds/:id` | | `204`; any member deletes it for everyone (versions, files, invites); `409 { lock }` while someone else hosts it |
 | POST | `/api/worlds/:id/invites` | | `{ code, expiresAt }` |
 | POST | `/api/invites/redeem` | `{ code }` | `World` |
 | POST | `/api/worlds/:id/versions` | raw file bytes; headers `X-Parent`, `X-Sha256`, `X-Started-At`, `X-Ended-At` | `{ version, head, diverged }` |

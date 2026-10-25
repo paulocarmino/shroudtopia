@@ -204,6 +204,12 @@ pub async fn new_invite(app: AppHandle, world: Option<String>) -> R {
     blocking(move || app.state::<Shared>().engine(move |e| e.new_invite(world.as_deref()))).await
 }
 
+/// Deletes the world on the server for every member; this PC's save stays in the game.
+#[tauri::command]
+pub async fn delete_world(app: AppHandle, world: String) -> R {
+    blocking(move || app.state::<Shared>().engine(move |e| e.delete_world(&world))).await
+}
+
 #[tauri::command]
 pub async fn redeem(app: AppHandle, code: String, into: StoreKind) -> R {
     blocking(move || {
