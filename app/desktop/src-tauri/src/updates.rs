@@ -101,13 +101,21 @@ fn step(app: &AppHandle) {
         (due, apply, i.phase.clone())
     };
     if due && !settled {
-        // looked at again once the game has been closed a while
+        // looked at again once the game has been closed a while; the card says so instead of ignoring the click
         u.inner.lock().unwrap().check_now = true;
+        if matches!(phase, Phase::Idle) {
+            set_phase(app, Phase::Waiting);
+        }
         return;
     }
-    if due && matches!(phase, Phase::Idle | Phase::Available(_)) {
+    if due && matches!(phase, Phase::Idle | Phase::Waiting | Phase::Available(_)) {
         set_phase(app, Phase::Checking);
+        let started = std::time::Instant::now();
         let r = updater::fetch_latest(PRODUCT_KEY.trim());
+        // a check takes a blink: keep "Verificando…" on screen long enough to be seen
+        if let Some(rest) = Duration::from_millis(800).checked_sub(started.elapsed()) {
+            std::thread::sleep(rest);
+        }
         let mut i = u.inner.lock().unwrap();
         i.saved.last_check = Some(Utc::now());
         match r {

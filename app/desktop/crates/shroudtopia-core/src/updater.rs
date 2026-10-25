@@ -252,6 +252,8 @@ pub fn remove_old(dir: &Path, attempts: u32) -> bool {
 pub enum Phase {
     #[default]
     Idle,
+    /// a check is due (asked for, or the hourly one) but the game is open or closed less than a minute ago
+    Waiting,
     Checking,
     /// a newer release that verified
     Available(Box<Offer>),
@@ -338,17 +340,20 @@ pub fn view(phase: &Phase, installed: Option<&str>, checked: Option<DateTime<Utc
             app_version,
         },
         Phase::Restarting => UpdateView { state: "installing".into(), name: "Reiniciando o app".into(), sub: String::new(), action: None, progress: Some(crate::view::ProgressView { pct: 100, text: "Abrindo a versão nova".into() }), changes: vec![], badge: false, app_version },
-        Phase::Idle | Phase::Checking => UpdateView {
+        Phase::Idle | Phase::Waiting | Phase::Checking => UpdateView {
             state: "ok".into(),
             name: mods,
             sub: match (phase, error, checked) {
                 (Phase::Checking, _, _) => "Verificando…".into(),
+                (Phase::Waiting, _, _) if game_running => "Verifica quando o Enshrouded fechar: nada é buscado com o jogo aberto".into(),
+                (Phase::Waiting, _, _) => "Verifica em instantes: o Enshrouded fechou há menos de um minuto".into(),
+                (_, None, Some(t)) if !none_published && (now - t).num_seconds() < 60 => "Tudo atualizado · verificado agora".into(),
                 (_, Some(e), _) => format!("Não deu para verificar: {e}"),
                 (_, None, Some(t)) if none_published => format!("Nenhuma versão publicada ainda · verificado {}", format::day_time(t, now, off)),
                 (_, None, Some(t)) => format!("Tudo atualizado · verificado {}", format::day_time(t, now, off)),
                 (_, None, None) => "Ainda não verificado".into(),
             },
-            action: act("Verificar", "", matches!(phase, Phase::Checking)),
+            action: act("Verificar", "", matches!(phase, Phase::Checking | Phase::Waiting)),
             progress: None,
             changes: vec![],
             badge: false,
@@ -488,7 +493,14 @@ mod tests {
         assert_eq!((v.name.as_str(), v.progress.unwrap().text.as_str()), ("Instalando 0.4.3", "Copiando os mods para a pasta do jogo"));
         let v = view(&Phase::Idle, Some("0.4.2"), Some(now), None, false, false, now, off);
         assert_eq!(v.name, "Mods v0.4.2");
-        assert!(v.sub.starts_with("Tudo atualizado · verificado hoje, "));
+        assert_eq!(v.sub, "Tudo atualizado · verificado agora");
         assert_eq!(v.action.unwrap().label, "Verificar");
+        let v = view(&Phase::Idle, Some("0.4.2"), Some(now - chrono::Duration::minutes(5)), None, false, false, now, off);
+        assert!(v.sub.starts_with("Tudo atualizado · verificado hoje, "));
+        let v = view(&Phase::Waiting, Some("0.4.2"), Some(now), None, false, true, now, off);
+        assert!(v.sub.starts_with("Verifica quando o Enshrouded fechar"));
+        assert!(v.action.unwrap().disabled);
+        let v = view(&Phase::Waiting, Some("0.4.2"), Some(now), None, false, false, now, off);
+        assert!(v.sub.starts_with("Verifica em instantes"));
     }
 }
