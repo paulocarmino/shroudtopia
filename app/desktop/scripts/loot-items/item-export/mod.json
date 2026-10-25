@@ -1,0 +1,9 @@
+{
+  "id": "item-export",
+  "name": "Item export",
+  "version": "1.0.0",
+  "capabilities": ["export"],
+  "description": "Writes items.json and icons/<guid>.png for the app's loot filter. Development tool, not shipped.",
+  "authors": ["Shroudtopia"],
+  "license": "MIT"
+}

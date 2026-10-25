@@ -4,6 +4,7 @@
   import type { ModView, Opt } from "./api";
   import Toggle from "./Toggle.svelte";
   import Note from "./Note.svelte";
+  import LootFilter from "./LootFilter.svelte";
 
   let { mods, error, onset }: { mods: ModView[]; error: string | null; onset: (mod: string, key: string, value: unknown) => void } = $props();
   let open = $state<string | null>("basics");
@@ -19,16 +20,25 @@
 {#if mods.length}
   <div class="card">
     {#each mods as m (m.key)}
-      {@const isOpen = open === m.key && m.options.length > 0}
+      {@const hasMore = m.options.length > 0 || !!m.panel}
+      {@const isOpen = open === m.key && hasMore}
       <div class="mod">
         <div class="mod-row" class:off={!m.active}>
           <div class="txt"><div class="name">{m.name}{#if m.restart} <span class="tag warn" title="Liga ou desliga na próxima vez que o Enshrouded abrir">requer restart</span>{/if}</div>{#if m.sub}<div class="sub">{m.sub}</div>{/if}</div>
-          {#if m.options.length}
+          {#if hasMore}
             <button class="chev" aria-expanded={isOpen} aria-label="Opções de {m.name}" onclick={() => (open = open === m.key ? null : m.key)}>{@html ICON.chev}</button>
           {/if}
           <Toggle on={m.active} label={m.name} onchange={(on) => onset(m.key, "active", on)} />
         </div>
-        {#if isOpen}
+        {#if isOpen && m.panel?.kind === "loot"}
+          <LootFilter
+            mode={m.panel.values.mode as string}
+            ids={m.panel.values.items as number[]}
+            disabled={!m.active}
+            onmode={(v) => onset(m.key, "mode", v)}
+            onitems={(v) => onset(m.key, "items", v)}
+          />
+        {:else if isOpen}
           <div class="opts">
             {#each m.options as o (o.key)}
               <div class="opt">

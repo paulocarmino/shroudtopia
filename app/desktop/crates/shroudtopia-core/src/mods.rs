@@ -37,7 +37,28 @@ pub struct KnownMod {
     /// `enabled=` in that folder's config.txt, which the mod reads when the game starts (the window says it needs a
     /// restart).
     pub eml: Option<&'static str>,
+    /// Options the window edits in a panel of its own instead of the list under the chevron.
+    pub panel: Option<Panel>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Panel {
+    /// which panel the window opens ("loot")
+    pub kind: &'static str,
+    /// the options it owns, with their value when the file has none
+    pub keys: &'static [(&'static str, PanelValue)],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PanelValue {
+    /// one of these strings, the first being the default
+    Choice(&'static [&'static str]),
+    /// a list of item ids (u32), empty by default
+    Ids,
+}
+
+/// The loot filter's two modes: "deny" picks up everything but the listed items, "allow" only the listed ones.
+const LOOT_PANEL: Panel = Panel { kind: "loot", keys: &[("mode", PanelValue::Choice(&["deny", "allow"])), ("items", PanelValue::Ids)] };
 
 /// The mods this repository ships, with the names the window shows (the prototype's). The basics mod reads
 /// `_no_resource_cost` (with the underscore) on this build, so that is the key the toggle writes.
@@ -54,8 +75,9 @@ pub const CATALOG: &[KnownMod] = &[
             KnownOpt { key: "hide_stamina_gauge", label: "Esconder a barra de stamina", kind: OptKind::Bool },
         ],
         eml: None,
+        panel: None,
     },
-    KnownMod { key: "Flight Mod", dll: "flight_mod.dll", name: "Voo", sub: "Planar sem perder altura", options: &[], eml: None },
+    KnownMod { key: "Flight Mod", dll: "flight_mod.dll", name: "Voo", sub: "Planar sem perder altura", options: &[], eml: None, panel: None },
     KnownMod {
         key: "FirstPersonView",
         dll: "first_person_view.dll",
@@ -63,6 +85,7 @@ pub const CATALOG: &[KnownMod] = &[
         sub: "Câmera nos olhos do personagem",
         options: &[KnownOpt { key: "camera_distance", label: "Distância da câmera", kind: OptKind::Number { default: -0.15, min: -0.5, max: 0.5, step: 0.05 } }],
         eml: None,
+        panel: None,
     },
     // third-party/Enshrouded-minimap; its other options (position, keys, style...) show by their key
     KnownMod {
@@ -79,6 +102,16 @@ pub const CATALOG: &[KnownMod] = &[
             KnownOpt { key: "scale_percent", label: "Tamanho (%)", kind: OptKind::Number { default: 100.0, min: 50.0, max: 200.0, step: 25.0 } },
         ],
         eml: None,
+        panel: None,
+    },
+    KnownMod {
+        key: "loot_filter",
+        dll: "loot_filter.dll",
+        name: "Filtro de saque",
+        sub: "Escolhe o que o Coletar Saque Espalhado Automaticamente pega",
+        options: &[],
+        eml: None,
+        panel: Some(LOOT_PANEL),
     },
     KnownMod {
         key: "max-stack",
@@ -87,6 +120,7 @@ pub const CATALOG: &[KnownMod] = &[
         sub: "Itens empilham 5× mais, até 999",
         options: &[],
         eml: Some("max-stack"),
+        panel: None,
     },
     KnownMod {
         key: "twitch-drops",
@@ -95,6 +129,7 @@ pub const CATALOG: &[KnownMod] = &[
         sub: "Quem tem um drop da Twitch resgata todos",
         options: &[],
         eml: Some("twitch-drops"),
+        panel: None,
     },
 ];
 
@@ -135,6 +170,30 @@ pub struct ModView {
     pub options: Vec<OptView>,
     /// a change applies the next time the game starts
     pub restart: bool,
+    pub panel: Option<PanelView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelView {
+    pub kind: String,
+    /// the panel's options, each with the file's value or its default
+    pub values: Map<String, Value>,
+}
+
+fn panel_value(kind: PanelValue, value: Option<&Value>) -> Option<Value> {
+    match (kind, value) {
+        (PanelValue::Choice(choices), Some(Value::String(s))) if choices.contains(&s.as_str()) => Some(json!(s)),
+        (PanelValue::Choice(choices), None) => Some(json!(choices[0])),
+        (PanelValue::Ids, Some(Value::Array(ids))) => {
+            let mut ids: Vec<u64> = ids.iter().filter_map(Value::as_u64).filter(|id| *id <= u32::MAX as u64).collect();
+            ids.sort_unstable();
+            ids.dedup();
+            Some(json!(ids))
+        }
+        (PanelValue::Ids, None) => Some(json!([])),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -263,15 +322,20 @@ fn mod_view(key: &str, entry: &Map<String, Value>, known: Option<&KnownMod>) -> 
             options.push(OptView { key: o.key.into(), label: o.label.into(), value: view_value(Some(o.kind), entry.get(o.key)) });
         }
     }
+    let panel = known.and_then(|k| k.panel);
     for (okey, value) in entry {
-        if okey == "active" || known.is_some_and(|k| k.options.iter().any(|o| o.key == okey)) {
+        if okey == "active" || known.is_some_and(|k| k.options.iter().any(|o| o.key == okey)) || panel.is_some_and(|p| p.keys.iter().any(|(pk, _)| pk == okey)) {
             continue;
         }
         options.push(OptView { key: okey.clone(), label: okey.clone(), value: view_value(None, Some(value)) });
     }
     let (name, sub) = known.map(|k| (k.name.to_string(), k.sub.to_string())).unwrap_or_else(|| (key.to_string(), String::new()));
     let sub = format!("{sub}{}", opt_count(options.len())).trim_start_matches(" · ").to_string();
-    ModView { key: key.into(), name, sub, active: entry.get("active").and_then(Value::as_bool).unwrap_or(false), options, restart: known.is_some_and(|k| k.eml.is_some()) }
+    let panel = panel.map(|p| PanelView {
+        kind: p.kind.into(),
+        values: p.keys.iter().map(|(pk, kind)| (pk.to_string(), panel_value(*kind, entry.get(*pk)).or_else(|| panel_value(*kind, None)).unwrap_or_default())).collect(),
+    });
+    ModView { key: key.into(), name, sub, active: entry.get("active").and_then(Value::as_bool).unwrap_or(false), options, restart: known.is_some_and(|k| k.eml.is_some()), panel }
 }
 
 /// Sets `mods.<mod_key>.<opt_key>` (`active` for the mod's own toggle) and writes the file.
@@ -302,7 +366,10 @@ pub fn set(path: &Path, mod_key: &str, opt_key: &str, value: Value) -> Result<()
             }
         }
         (Value::Number(n), _) if n.is_f64() => json!((n.as_f64().unwrap_or(0.0) * 1e6).round() / 1e6),
-        _ => value,
+        _ => match known(mod_key).and_then(|k| k.panel).and_then(|p| p.keys.iter().find(|(pk, _)| *pk == opt_key)) {
+            Some((_, kind)) => panel_value(*kind, Some(&value)).ok_or_else(|| ModsError::Invalid(format!("valor inválido para {opt_key}")))?,
+            None => value,
+        },
     };
     let mods = root.entry("mods").or_insert_with(|| json!({}));
     if !mods.is_object() {
@@ -431,6 +498,25 @@ mod tests {
         let root: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(root["mods"]["minimap_mod"], json!({"active":true,"show_clock":true,"show_weather":false,"position":"bottom-right","scale_percent":100}));
         assert_eq!(value(&minimap(&path), "show_weather"), OptValue::Bool { value: false });
+    }
+
+    #[test]
+    fn the_loot_filter_keeps_its_mode_and_items_in_a_panel() {
+        let (dir, path) = copy();
+        let mods_dir = dir.path().join("mods");
+        fs::create_dir_all(&mods_dir).unwrap();
+        fs::write(mods_dir.join("loot_filter.dll"), b"MZ").unwrap();
+        let loot = |p: &Path| view(p, Some(&mods_dir)).unwrap().into_iter().find(|m| m.key == "loot_filter").unwrap();
+        let m = loot(&path);
+        assert!(m.options.is_empty(), "mode and items are not in the chevron's list");
+        assert_eq!(m.panel, Some(PanelView { kind: "loot".into(), values: serde_json::from_value(json!({"mode": "deny", "items": []})).unwrap() }));
+        set(&path, "loot_filter", "items", json!([4000000000u64, 12, 12])).unwrap();
+        set(&path, "loot_filter", "mode", json!("allow")).unwrap();
+        let root: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(root["mods"]["loot_filter"], json!({"items": [12, 4000000000u64], "mode": "allow"}));
+        assert!(matches!(set(&path, "loot_filter", "mode", json!("all")), Err(ModsError::Invalid(_))));
+        assert!(matches!(set(&path, "loot_filter", "items", json!("12")), Err(ModsError::Invalid(_))));
+        assert_eq!(loot(&path).panel.unwrap().values["mode"], "allow");
     }
 
     #[test]

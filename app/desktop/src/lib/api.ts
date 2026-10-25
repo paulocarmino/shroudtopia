@@ -29,7 +29,9 @@ export type OptValue =
   | { kind: "number"; value: number; min: number; max: number; step: number }
   | { kind: "other"; text: string };
 export type Opt = { key: string; label: string } & OptValue;
-export interface ModView { key: string; name: string; sub: string; active: boolean; options: Opt[]; restart: boolean }
+/** Options the window edits in a panel of its own ("loot": the loot filter's mode and items). */
+export interface PanelView { kind: string; values: Record<string, unknown> }
+export interface ModView { key: string; name: string; sub: string; active: boolean; options: Opt[]; restart: boolean; panel?: PanelView | null }
 export interface UpdateView { state: "ok" | "avail" | "blocked" | "installing"; name: string; sub: string; action: Action | null; progress: Progress | null; changes: string[]; badge: boolean; appVersion: string }
 export interface UiState {
   sync: Snapshot | null; gameRunning: boolean;
@@ -60,6 +62,7 @@ function mockCall(cmd: string, args?: Record<string, unknown>): unknown {
     if (m && args.key === "active") m.active = args.value as boolean;
     const o = m?.options.find((x) => x.key === args.key);
     if (o && o.kind !== "other") (o as { value: unknown }).value = args.value;
+    if (m?.panel && (args.key as string) in m.panel.values) m.panel.values[args.key as string] = args.value;
   }
   return null;
 }
