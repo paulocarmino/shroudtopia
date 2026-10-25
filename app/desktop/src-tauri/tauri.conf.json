@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Shroudtopia",
   "mainBinaryName": "Shroudtopia",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "identifier": "com.paulocarmino.shroudtopia",
   "build": {
     "beforeDevCommand": "npm run dev",
