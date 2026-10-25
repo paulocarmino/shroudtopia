@@ -96,22 +96,25 @@ public:
 		}
 		LOG_CLASS(std::string(" found ").append(std::to_string(patches.size())).append(" stamina spend sites").c_str());
 		hookScriptCosts(image, size);
+		hookAttributeAdds(image, size);
 	}
 
 	~NoStaminaLoss()
 	{
 		for (auto p : patches) { p->undo(); delete p; }
 		if (scriptCosts) scriptCosts->deactivate();
+		for (auto d : attributeAdds) d->deactivate();
 	}
 
 	void activate()
 	{
-		if (patches.empty() && !scriptCosts) {
+		if (patches.empty() && !scriptCosts && attributeAdds.empty()) {
 			LOG_CLASS(" no stamina spend sites found, not activated");
 			return;
 		}
 		for (auto p : patches) p->apply();
 		if (scriptCosts) scriptCosts->activate();
+		for (auto d : attributeAdds) d->activate();
 		active = true;
 		LOG_CLASS("Activated");
 	}
@@ -120,12 +123,59 @@ public:
 	{
 		for (auto p : patches) p->undo();
 		if (scriptCosts) scriptCosts->deactivate();
+		for (auto d : attributeAdds) d->deactivate();
 		active = false;
 		LOG_CLASS("Deactivated");
 	}
 
 private:
 	Mem::Detour* scriptCosts = nullptr;
+	std::vector<Mem::Detour*> attributeAdds;
+
+	// Jumping (player_control_action_sequence) and tool use such as digging with a pickaxe (actor_pay_usage_cost)
+	// pay stamina through a helper that adds a signed delta to an attribute: AddAttribute(container, ctx,
+	// r8d = delta, r9d = hash), "add [rcx+rdx*4], edi" inside. The sites above only catch "sub", so these got
+	// through. Hook its entry (every copy of it) and zero negative stamina deltas; raises and other attributes pass.
+	void hookAttributeAdds(const uint8_t* image, size_t size)
+	{
+		// mov [rsp+10],rbx; mov [rsp+18],rbp; mov [rsp+20],rsi; push rdi; sub rsp,60; mov edi,r8d; mov rbx,rdx;
+		// mov r8,rdx; mov rsi,rcx; mov edx,r9d; lea rcx,[rsp+20]; call lookup; ... add [rcx+rdx*4],edi
+		const char* pattern =
+			"\x48\x89\x5C\x24\x10\x48\x89\x6C\x24\x18\x48\x89\x74\x24\x20\x57\x48\x83\xEC\x60\x41\x8B\xF8\x48\x8B\xDA"
+			"\x4C\x8B\xC2\x48\x8B\xF1\x41\x8B\xD1\x48\x8D\x4C\x24\x20\xE8\x00\x00\x00\x00\x0F\xB6\x4C\x24\x20\x33\xED"
+			"\x84\xC9\x74\x00\x0F\xB7\xC5\xE9\x00\x00\x00\x00\x48\x8B\x44\x24\x28\x0F\xB7\x40\x0C\x0F\xB7\xD0\x48\x85"
+			"\xF6\x0F\x84\x00\x00\x00\x00\xF6\x46\x06\x01\x0F\x84\x00\x00\x00\x00\x0F\xB7\x4E\x04\x4C\x8B\xC3\x48\x03"
+			"\xCE\x01\x3C\x91";
+		const char* mask =
+			"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx????xxxxxxxxxx?xxxx????xxxxxxxxxxxxxxxxx????xxxxxx????xxxxxxxxxxxxx";
+		// Mem::FindPattern restarts at the start of the memory region, so it cannot step past a first match.
+		const size_t length = std::strlen(mask);
+		for (size_t s = 0x1000; s + length < size; ++s)
+		{
+			size_t j = 0;
+			while (j < length && (mask[j] == '?' || image[s + j] == (uint8_t)pattern[j])) ++j;
+			if (j < length)
+				continue;
+			const uintptr_t match = (uintptr_t)(image + s);
+			uint8_t cave[] = {
+				0x41, 0x81, 0xF9, 0x8B, 0xAA, 0xB6, 0x04, // 0  cmp r9d, StaminaHash
+				0x75, 0x08,                               // 7  jne original
+				0x45, 0x85, 0xC0,                         // 9  test r8d, r8d
+				0x79, 0x03,                               // 12 jns original
+				0x45, 0x31, 0xC0,                         // 14 xor r8d, r8d (a cost: add nothing)
+				0x48, 0x89, 0x5C, 0x24, 0x10,             // 17 original: mov [rsp+10], rbx
+				0x48, 0x89, 0x6C, 0x24, 0x18,             // 22 original: mov [rsp+18], rbp
+				0xE9, 0, 0, 0, 0,                         // 27 jmp back
+			};
+			auto detour = new Mem::Detour(match, cave, sizeof(cave), false, 5);
+			const uintptr_t at = (uintptr_t)detour->shellcode->data->address;
+			detour->shellcode->updateValue<int32_t>(28, (int32_t)(match + 10 - (at + sizeof(cave))));
+			attributeAdds.push_back(detour);
+			s += length - 1;
+		}
+		LOG_CLASS(std::string(" hooked ").append(std::to_string(attributeAdds.size()))
+			.append(" attribute add helpers for jump and tool stamina costs").c_str());
+	}
 
 	// Costs that game data defines (mining, tools, abilities) are paid by the impact script node ChangeAttribute,
 	// not by the sites above: it reads the attribute (r13d), applies the operation, reads the result (r14d) and
