@@ -1,6 +1,6 @@
 [package]
 name = "shroudtopia"
-version = "0.1.7"
+version = "0.1.8"
 description = "Shroudtopia: the desktop app's window and tray. Wiring only; the app is shroudtopia-core."
 edition = "2021"
 license = "MIT"
