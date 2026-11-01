@@ -1,0 +1,123 @@
+# Farm seeds and harvested crops
+# Generated from Enshrouded_Loots_Ultra_Clean_Sorted.txt
+# 1.0 = normal, 2.0 = double — stacks with farmingGlobal x farmingMultiplier
+
+# --- Food - Raw Ingredients (38) ---
+Food_T1_raw_fruit_Red_Berries=1.0
+Food_T1_raw_grain_Corncob=1.0
+Food_T1_raw_herb_StJohnsWort=1.0
+Food_T1_raw_hydration_Milk=1.0
+Food_T1_raw_hydration_Water_Pouch_Filled_DEPRECATED=1.0
+Food_T1_raw_mushroom_Mushroom_brown=1.0
+Food_T1_raw_nightplant_NightLily=1.0
+Food_T1_raw_sweets_Honey=1.0
+Food_T1_raw_vegetable_Tomato=1.0
+Food_T2_raw_fruit_Strawberry=1.0
+Food_T2_raw_grain_Hazelnut=1.0
+Food_T2_raw_herb_StingingNettle=1.0
+Food_T2_raw_nightplant_NightBerry=1.0
+Food_T2_raw_vegetable_ForestBeet=1.0
+Food_T3_raw_egg_BirdEggs=1.0
+Food_T3_raw_herb_Sage_Leaves=1.0
+Food_T3_raw_sweets_SugarCane=1.0
+Food_T3_raw_vegetable_RedPepper=1.0
+Food_T4_raw_fruit_Date=1.0
+Food_T4_raw_fruit_YuccaFruit=1.0
+Food_T4_raw_herb_DevilsClaw=1.0
+Food_T5_raw_herb_Gentian=1.0
+Food_T5_raw_hydration_MountaingoatMilk=1.0
+Food_T5_raw_vegetables_Pumpkin=1.0
+Food_T6_raw_fish_FishCutlet=1.0
+Food_T6_raw_fish_FishFilet=1.0
+Food_T6_raw_fruit_YellowBanana=1.0
+Food_T6_raw_herb_Algae=1.0
+Food_T6_raw_hydration_CoconutWater=1.0
+Food_T6_raw_mushroom_Shiitake=1.0
+Food_T6_raw_vegetable_Ginger=1.0
+Food_T7_raw_fruit_Artichoke=1.0
+Food_T7_raw_fruit_Pomegranate=1.0
+Food_T7_raw_vegetable_Cabbage=1.0
+_Food_raw_T3_fish_common_03=1.0
+_Food_raw_T3_fish_uncommon_03=1.0
+_Food_raw_T5_fish_rare_03=1.0
+_Food_raw_T6_fish_epic_02=1.0
+
+# --- Food - Raw / Bad / Uncooked (23) ---
+Food_T1_raw_bad_meat_LeanMeat=1.0
+Food_T1_raw_bad_meat_WolfMeat=1.0
+Food_T2_raw_bad_hydration_CatdeerMilk=1.0
+Food_T2_raw_bad_meat_Game=1.0
+Food_T2_raw_bad_mushroom_AzureRussula=1.0
+Food_T3_raw_bad_meat_Bird=1.0
+Food_T4_raw_bad_meat_SanddiggerMeat=1.0
+Food_T5_raw_bad_meat_fat=1.0
+Food_T5_raw_bad_mushroom_YellowFogMushroom=1.0
+Food_T6_raw_bad_fruit_GreenBanana=1.0
+Food_T6_raw_bad_herb_AlgaeBuds=1.0
+Food_T6_raw_bad_meat_CrabMeat=1.0
+Food_T6_raw_bad_vegetable_Taro=1.0
+Food_T7_raw_bad_vegetable_Beans=1.0
+_Food_raw_bad_T1_fish_common_01=1.0
+_Food_raw_bad_T1_fish_common_02=1.0
+_Food_raw_bad_T2_fish_uncommon_01=1.0
+_Food_raw_bad_T2_fish_uncommon_02=1.0
+_Food_raw_bad_T4_fish_rare_01=1.0
+_Food_raw_bad_T4_fish_rare_02=1.0
+_Food_raw_bad_T5_fish_rare_04=1.0
+_Food_raw_bad_T6_fish_epic_01=1.0
+_Food_raw_bad_T6_fish_epic_03=1.0
+
+# --- Farming - Fruit Seeds / Saplings (6) ---
+T1_Seedling_Fruit_BerryBushes=1.0
+T2_Seedling_Elderberry_bush=1.0
+T2_Seedling_Fruit_Strawberry=1.0
+T6_Seedling_Banana=1.0
+T7_Seedling_Fruit_Artichoke=1.0
+T7_Seedling_Fruit_Pomegranate=1.0
+
+# --- Farming - Vegetable Seeds (8) ---
+T1_Seedling_Vegetable_Tomato=1.0
+T2_Seedling_Vegetable_Beets=1.0
+T3_Seedling_Vegetable_Pepper=1.0
+T5_Seedling_Pumpkin_01=1.0
+T6_Seedling_Vegetable_Ginger=1.0
+T6_Seedling_Vegetable_Taro=1.0
+T7_Seedling_Vegetable_Bean=1.0
+T7_Seedling_Vegetable_Cabbage=1.0
+
+# --- Farming - Herbs / Tea Plants (9) ---
+T1_Seedling_Herb_St_Johns_Wort=1.0
+T2_Seedling_Herb_Nettle=1.0
+T2_Seedling_Tea_Chamomille=1.0
+T3_Seedling_Herb_Sage=1.0
+T3_Seedling_Tea_Rooibos=1.0
+T4_Seedling_Herb_Devils_Claw=1.0
+T4_Seedling_Tea_Saffron=1.0
+T5_Seedling_Gentian=1.0
+T6_Seedling_Herb_Algae=1.0
+
+# --- Farming - Grain Seeds (3) ---
+T1_Seedling_Grain_Corn=1.0
+T3_Seedling_Grain_Wheat=1.0
+T6_Seedling_Grain_Rice=1.0
+
+# --- Farming - Mushroom Seeds (3) ---
+T1_Seedling_Mushroom_brown=1.0
+T4_Seedling_Mushroom_AzureRussula_GlowShroom=1.0
+T6_Seedling_Mushroom_Shiitake=1.0
+
+# --- Farming - Other Seeds / Plants (14) ---
+T1_Seedling_Material_Shrub=1.0
+T2_Seedling_Material_Flax=1.0
+T2_Seedling_Material_Hazelnuts=1.0
+T2_Seedling_Material_Indigo=1.0
+T3_Seedling_SugarCane=1.0
+T4_Seedling_Desert_Yucca_01=1.0
+T4_Seedling_Desert_flower=1.0
+T4_Seedling_Material_Aloe=1.0
+T5_Seedling_TentacleSeed=1.0
+T5_Seedling_Wolfsbane=1.0
+T6_Seedling_CoffeePlant=1.0
+T6_Seedling_Flower_Daylily=1.0
+_T1_Seedling_Bush_Cattail=1.0
+_T1_Seedling_Bush_Reed=1.0

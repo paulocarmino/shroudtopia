@@ -1,0 +1,32 @@
+# The values every player gets: a release replaces this file. Changing it needs a new release; the players' on/off is
+# config.txt, which the app writes. Containers already rolled in a world keep what they hold.
+
+# Legacy fallback if a section global is missing
+globalMultiplier=1.0
+
+# Per-section global multipliers
+collectingGlobalMultiplier=3.0
+treesGlobalMultiplier=3.0
+farmingGlobalMultiplier=3.0
+enemyGlobalMultiplier=3.0
+chestGlobalMultiplier=3.0
+
+# Per-section activity multipliers
+collectingMultiplier=1.0
+treesMultiplier=1.0
+farmingMultiplier=1.0
+enemyLootMultiplier=1.0
+chestLootMultiplier=1.0
+
+# Terrain mined with the pickaxe, straight into the inventory (ore veins, dirt, stone): uses the collecting values
+patchTerrain=true
+
+# Also raises the difficulty presets' resource drop factor by the highest multiplier above, on top of everything else
+# (a x3 on chests triples wood): off
+patchGameSettings=false
+
+# Random loot (enemies/items.txt), which chests roll on too, and corpses
+patchEnemyLoot=true
+
+# Items placed in world chests, shelves and other containers (chests/items.txt)
+patchChestLoot=true

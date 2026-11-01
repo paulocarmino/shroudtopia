@@ -1,0 +1,36 @@
+# Trees, wood, logs, and tree seedlings
+# Generated from Enshrouded_Loots_Ultra_Clean_Sorted.txt
+# 1.0 = normal, 2.0 = double — stacks with treesGlobal x treesMultiplier
+
+# --- Farming - Trees / Wood Plants (15) ---
+T1_Seedling_Greenhillzone_Tree_01=1.0
+T1_Seedling_Greenhillzone_Tree_02=1.0
+T1_Seedling_Greenhillzone_Tree_03=1.0
+T2_Seedling_Deepforest_Tree_02=1.0
+T2_Seedling_Deepforest_Tree_Maple_03=1.0
+T3_Seedling_Steppes_Tree_02=1.0
+T3_Seedling_Steppes_Tree_03=1.0
+T4_Seedling_Desert_Tree_Cactus=1.0
+T4_Seedling_Desert_Tree_DatePalm=1.0
+T5_Seedling_Pine=1.0
+T6_Seedling_Bamboo=1.0
+T6_Seedling_Coconut_Palm=1.0
+T6_Seedling_Tree_Licuala=1.0
+T6_Seedling_Tree_Mangrove=1.0
+_T6_Seedling_Tree_Papyrus=1.0
+
+# --- Crafting Resources - Wood / Paper / Fuel (19) ---
+Material_T1_Wood_Acid=1.0
+Material_T1_Wood_Logs=1.0
+Material_T1_Wood_Logs_Dead=1.0
+Material_T2_Wood_Hardwood=1.0
+Material_T2_Wood_Planks=1.0
+Material_T4_Wood_Logs_Palm=1.0
+Material_T5_MountainWoodlouse_FishingBait_WIP=1.0
+Material_T5_Wood_Logs_Pine=1.0
+Material_T6_Wood_Logs_Bamboo=1.0
+Material_T6_Wood_Logs_Tropical=1.0
+
+# --- Crafting Resources - General Materials (80) ---
+Material_T1_Plant_Fibre=1.0
+Material_T1_Twigs=1.0

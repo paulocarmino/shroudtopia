@@ -486,10 +486,11 @@ mod tests {
         assert_eq!(fs::read(backup.join("shroudtopia.dll")).unwrap(), b"old loader");
         assert_eq!(fs::read(game.join("shroudtopia.json")).unwrap(), b"{\"mine\":true}");
         // mod folders (the minimap, EML's Lua mods) and EML itself
-        fs::write(&zip, zip_of(&[("shroudtopia.dll", b"new loader"), ("dbghelp.dll", b"eml"), ("mods/minimap_mod/minimap_mod.dll", b"map"), ("mods/minimap_mod/mod.json", b"{}"), ("mods/minimap_mod/embervale_minimap_terrain.frag", b"f"), ("mods/minimap_mod/embervale_minimap_terrain.vert", b"v"), ("mods/max-stack/src/mod.lua", b"lua")])).unwrap();
-        assert_eq!(install_mods(&zip, &game, &backup, &mut |_, _| {}).unwrap().len(), 7);
+        fs::write(&zip, zip_of(&[("shroudtopia.dll", b"new loader"), ("dbghelp.dll", b"eml"), ("mods/minimap_mod/minimap_mod.dll", b"map"), ("mods/minimap_mod/mod.json", b"{}"), ("mods/minimap_mod/embervale_minimap_terrain.frag", b"f"), ("mods/minimap_mod/embervale_minimap_terrain.vert", b"v"), ("mods/max-stack/src/mod.lua", b"lua"), ("mods/loot-multipliers/chests/items.txt", b"items")])).unwrap();
+        assert_eq!(install_mods(&zip, &game, &backup, &mut |_, _| {}).unwrap().len(), 8);
         assert_eq!(fs::read(game.join("mods/minimap_mod/embervale_minimap_terrain.vert")).unwrap(), b"v");
         assert_eq!(fs::read(game.join("mods/max-stack/src/mod.lua")).unwrap(), b"lua");
+        assert_eq!(fs::read(game.join("mods/loot-multipliers/chests/items.txt")).unwrap(), b"items");
         assert_eq!(fs::read(game.join("dbghelp.dll")).unwrap(), b"eml");
         // a zip with anything else is refused whole, before a file is written
         for bad in ["shroudtopia.json", "../evil.dll", "mods/../../x.dll", "mods/a/b/c/x.dll", "mods/sub/x.exe", "mods/sub/.hidden.json", "mods/../x.json", "other.exe", "/abs.dll"] {

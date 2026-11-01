@@ -1,0 +1,9 @@
+{
+  "id": "loot-multipliers",
+  "name": "Gather & Loot Multipliers",
+  "version": "2.2.1",
+  "capabilities": ["patch"],
+  "description": "Multiplies what collecting, tree cutting, farming, enemies and chests give, with values shipped by Shroudtopia.",
+  "authors": ["Enshrouded Mods", "Shroudtopia"],
+  "license": "MIT"
+}

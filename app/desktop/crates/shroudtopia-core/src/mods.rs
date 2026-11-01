@@ -131,6 +131,16 @@ pub const CATALOG: &[KnownMod] = &[
         eml: Some("twitch-drops"),
         panel: None,
     },
+    // the multipliers ship in the mod's settings.txt, so this is only the on/off
+    KnownMod {
+        key: "loot-multipliers",
+        dll: "loot-multipliers/mod.json",
+        name: "Multiplicadores de saque",
+        sub: "Coleta, mineração, fazenda, inimigos e baús, nos valores do Shroudtopia",
+        options: &[],
+        eml: Some("loot-multipliers"),
+        panel: None,
+    },
 ];
 
 /// `enabled=` of an EML mod's config.txt; no file (or no line) is on, as the mod reads it.
@@ -537,5 +547,17 @@ mod tests {
         set(&path, "max-stack", "active", json!(true)).unwrap();
         assert!(listed(&path).unwrap().active);
         assert!(!view(&path, Some(&mods_dir)).unwrap()[0].restart);
+    }
+
+    #[test]
+    fn the_toggle_of_the_loot_multipliers_leaves_their_shipped_values_alone() {
+        let (dir, path) = copy();
+        let folder = dir.path().join("mods/loot-multipliers");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join("mod.json"), "{}").unwrap();
+        fs::write(folder.join("settings.txt"), "chestGlobalMultiplier=2.0\n").unwrap();
+        set(&path, "loot-multipliers", "active", json!(false)).unwrap();
+        assert_eq!(fs::read_to_string(folder.join("config.txt")).unwrap(), "enabled=false\n");
+        assert_eq!(fs::read_to_string(folder.join("settings.txt")).unwrap(), "chestGlobalMultiplier=2.0\n");
     }
 }

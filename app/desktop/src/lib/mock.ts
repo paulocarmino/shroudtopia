@@ -77,6 +77,7 @@ export function mockState(): UiState {
         { key: "loot_filter", name: "Filtro de saque", sub: "Escolhe o que o Coletar Saque Espalhado Automaticamente pega", active: true, options: [], restart: false, panel: { kind: "loot", values: { mode: "deny", items: [1798662696] } } },
         { key: "max-stack", name: "Max Stack", sub: "Itens empilham 5× mais, até 999", active: true, options: [], restart: true },
         { key: "twitch-drops", name: "Drops da Twitch", sub: "Quem tem um drop da Twitch resgata todos", active: true, options: [], restart: true },
+        { key: "loot-multipliers", name: "Multiplicadores de saque", sub: "Coleta, mineração, fazenda, inimigos e baús, nos valores do Shroudtopia", active: true, options: [], restart: true },
       ],
     },
     update: update(q.get("upd") ?? "ok"),
