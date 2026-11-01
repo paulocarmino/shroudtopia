@@ -96,9 +96,11 @@ pub struct Runtime {
     pub contacted: bool,
     pub presence: Vec<PresencePlayer>,
     pub game_running: bool,
-    /// the game closed less than a minute ago (process::game_settled): no pull into the saves yet, Steam is still
-    /// syncing the game's cloud files
+    /// the game closed a few seconds ago (process::game_settled): nothing is written to a Steam slot yet, Steam is
+    /// still syncing the game's cloud files
     pub just_closed: bool,
+    /// a version downloaded and checked, by its id, on its way to the slot: it waits here for `just_closed` to pass
+    fetched: Option<(String, Vec<u8>)>,
     pub lock_mine: bool,
     pub transfer: Transfer,
     pub error: Option<String>,
@@ -552,6 +554,11 @@ impl Engine {
         }
     }
 
+    /// This world's slot is Steam's and Steam is still syncing after the game closed: its write has to wait.
+    pub fn waiting_steam(&self) -> bool {
+        self.rt.just_closed && self.cfg.world.as_ref().is_some_and(|l| l.store == StoreKind::Steam)
+    }
+
     pub fn behind(&self) -> bool {
         let head = self.rt.world.as_ref().and_then(|w| w.head.as_ref()).map(|h| h.version_id.as_str());
         let base = self.cfg.world.as_ref().and_then(|l| l.base.as_deref());
@@ -853,9 +860,10 @@ impl Engine {
             // behind and changed: "Vocês jogaram separados", the player picks
             return;
         }
-        if self.behind() && self.holder() != Holder::Other && !self.rt.just_closed {
+        if self.behind() && self.holder() != Holder::Other {
             let head = self.rt.world.as_ref().and_then(|w| w.head.clone()).unwrap();
-            if let Err(e) = self.pull(&head) {
+            let r = if self.waiting_steam() { self.fetch_version(&head) } else { self.pull(&head) };
+            if let Err(e) = r {
                 self.rt.error = Some(e);
             }
         }
@@ -961,14 +969,13 @@ impl Engine {
 
     // ------------------------------------------------------------------ pull
 
-    /// Puts `version` in the slot: downloaded whole and checked against its sha256, the replaced file kept in
-    /// `<data>\backup\world<N>.ksd.shroudtopia-<versionId>`, then written in one go. Never while the game runs.
-    pub fn pull(&mut self, version: &Version) -> R<()> {
-        if self.rt.game_running {
-            return Err("Feche o Enshrouded para baixar o mundo.".into());
+    /// `version` downloaded whole and checked against its sha256, into `rt.fetched` (once: it may wait there).
+    fn fetch_version(&mut self, version: &Version) -> R<()> {
+        if self.rt.fetched.as_ref().is_some_and(|(vid, _)| *vid == version.version_id) {
+            return Ok(());
         }
-        let (link, store) = self.link_store()?;
-        let id = link.world_id.clone();
+        let (link, _) = self.link_store()?;
+        let id = link.world_id;
         let vid = version.version_id.clone();
         let mut bytes = Vec::with_capacity(version.size as usize);
         let r = self.with_transfer(Transfer::Down { done: 0, total: version.size }, |api, progress| api.download(&id, &vid, &mut bytes, progress));
@@ -980,9 +987,23 @@ impl Engine {
         if sha_hex(&bytes) != version.sha256 {
             return Err("O arquivo baixado não confere com o do servidor. Nada foi trocado.".into());
         }
+        self.rt.fetched = Some((vid, bytes));
+        Ok(())
+    }
+
+    /// Puts `version` in the slot: downloaded, the replaced file kept in
+    /// `<data>\backup\world<N>.ksd.shroudtopia-<versionId>`, then written in one go. Never while the game runs.
+    pub fn pull(&mut self, version: &Version) -> R<()> {
+        if self.rt.game_running {
+            return Err("Feche o Enshrouded para baixar o mundo.".into());
+        }
+        let (link, store) = self.link_store()?;
+        self.fetch_version(version)?;
         if self.rt.game_running {
             return Err("O Enshrouded abriu durante o download; o mundo baixa quando ele fechar.".into());
         }
+        let vid = version.version_id.clone();
+        let bytes = self.rt.fetched.take().map(|(_, bytes)| bytes).unwrap_or_default();
         if let Ok(old) = store.read(link.slot) {
             let dir = self.data("backup");
             let backup = dir.join(format!("{}.shroudtopia-{}", steam::slot_file(link.slot), vid));
@@ -1009,8 +1030,8 @@ impl Engine {
         if self.rt.game_running {
             return Err("O Enshrouded já está aberto.".into());
         }
-        if self.rt.just_closed {
-            return Err("O Enshrouded acabou de fechar. Espera um minuto e clica em Jogar de novo.".into());
+        if self.waiting_steam() {
+            return Err("O Enshrouded acabou de fechar. Espera uns segundos e clica em Jogar de novo.".into());
         }
         if self.cfg.world.is_some() {
             self.fetch();

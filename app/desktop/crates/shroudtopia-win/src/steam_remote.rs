@@ -37,7 +37,7 @@ impl HelperRemote {
             return Err(io::Error::other("o Enshrouded está aberto"));
         }
         if !crate::process::game_settled() {
-            return Err(io::Error::other("o Enshrouded acabou de fechar; o app grava no Steam daqui a um minuto"));
+            return Err(io::Error::other("o Enshrouded acabou de fechar; o app grava no Steam em alguns segundos"));
         }
         if !crate::process::steam_running() {
             return Err(io::Error::other("o Steam não está aberto; abra o Steam e tente de novo"));

@@ -252,6 +252,50 @@ fn a_pull_never_happens_with_the_game_open() {
 }
 
 #[test]
+fn right_after_the_game_closes_a_steam_slot_downloads_and_waits_to_write() {
+    let mut w = World2::new();
+    w.me.e.stores.steam = w.me.e.stores.local.clone();
+    w.me.e.cfg.world.as_mut().unwrap().store = StoreKind::Steam;
+    w.at(60);
+    w.tick(false, true);
+    w.fr.write(1, b"friend session");
+    w.at(60);
+    w.tick(false, false);
+    // Steam is still syncing: the session comes down at once, the slot stays as it was
+    w.me.e.rt.just_closed = true;
+    w.at(1);
+    w.tick(false, false);
+    let id = w.me.e.cfg.world.as_ref().unwrap().world_id.clone();
+    let head = w.server.world(&id).head.unwrap();
+    assert_eq!(w.me.e.rt.fetched.as_ref().unwrap().0, head.version_id);
+    assert_eq!(w.me.read(0), b"world v1");
+    assert_eq!(w.me.e.state(), SyncState::Behind);
+    assert_eq!(w.me.e.snapshot().worlds[0].clone().status, "Esperando a Steam terminar");
+    assert!(w.me.e.play(None).unwrap_err().contains("uns segundos"));
+    // Steam is done: the bytes that waited go into the slot
+    w.me.e.rt.just_closed = false;
+    w.at(1);
+    w.tick(false, false);
+    assert_eq!(w.me.read(0), b"friend session");
+    assert!(w.me.e.rt.fetched.is_none());
+    assert_eq!(w.me.e.state(), SyncState::Sync);
+}
+
+#[test]
+fn a_local_slot_does_not_wait_for_steam() {
+    let mut w = World2::new();
+    w.at(60);
+    w.tick(false, true);
+    w.fr.write(1, b"friend session");
+    w.at(60);
+    w.tick(false, false);
+    w.me.e.rt.just_closed = true;
+    w.at(1);
+    w.tick(false, false);
+    assert_eq!(w.me.read(0), b"friend session");
+}
+
+#[test]
 fn play_pulls_first() {
     let mut w = World2::new();
     w.at(60);

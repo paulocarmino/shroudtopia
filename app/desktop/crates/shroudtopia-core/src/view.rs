@@ -365,6 +365,7 @@ fn world_view(e: &mut Engine, off: FixedOffset) -> Option<WorldView> {
                 Some(h) => (format!("Baixando a sessão do {}", who(&h.uploaded_by)), format!("{} jogou {}", who(&h.uploaded_by), f::range(h.started_at, h.ended_at, now, off))),
                 None => ("Baixando".into(), String::new()),
             };
+            let status = if e.waiting_steam() && transfer == Transfer::Idle { "Esperando a Steam terminar".to_string() } else { status };
             let line = if game && transfer == Transfer::Idle { format!("{line} · baixa quando você fechar o jogo") } else { line };
             ("busy", status, line, play(true), None)
         }
