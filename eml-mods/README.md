@@ -5,7 +5,7 @@ that sits beside Shroudtopia's: EML is `dbghelp.dll` in the game folder, Shroudt
 Both read `mods/`. EML takes the folders whose `mod.json` it understands and runs their `src/mod.lua`; Shroudtopia
 loads the DLL in a folder and skips one that has none, as it does `max-stack/`.
 
-- `max-stack/`: Max Stack 1.0.0 from Nexus (MIT) with its options fixed (×5, up to 999, never below vanilla).
+- `max-stack/`: Max Stack 1.0.0 from Nexus (MIT) with its options fixed (every stackable item at 999, never below vanilla).
 - `twitch-drops/`: every Twitch drop hands out the items of all 50 drops (57 outfits and decorations). Keen's server
   still says which drops a player has, so it covers players with at least one drop unlocked; the host's game decides,
   so the host needs the mod. The items keep their `TwitchDrop` flag: claiming needs it.

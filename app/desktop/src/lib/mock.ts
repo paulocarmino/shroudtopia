@@ -75,7 +75,7 @@ export function mockState(): UiState {
         { key: "Flight Mod", name: "Voo", sub: "Planar sem perder altura", active: true, options: [], restart: false },
         { key: "FirstPersonView", name: "Primeira pessoa", sub: "Câmera nos olhos do personagem · 1 opção", active: false, options: [{ key: "camera_distance", label: "Distância da câmera", kind: "number", value: -0.15, min: -0.5, max: 0.5, step: 0.05 }], restart: false },
         { key: "loot_filter", name: "Filtro de saque", sub: "Escolhe o que o Coletar Saque Espalhado Automaticamente pega", active: true, options: [], restart: false, panel: { kind: "loot", values: { mode: "deny", items: [1798662696] } } },
-        { key: "max-stack", name: "Max Stack", sub: "Itens empilham 5× mais, até 999", active: true, options: [], restart: true },
+        { key: "max-stack", name: "Max Stack", sub: "Itens empilham até 999", active: true, options: [], restart: true },
         { key: "twitch-drops", name: "Drops da Twitch", sub: "Quem tem um drop da Twitch resgata todos", active: true, options: [], restart: true },
         { key: "loot-multipliers", name: "Multiplicadores de saque", sub: "Coleta, mineração, fazenda, inimigos e baús, nos valores do Shroudtopia", active: true, options: [], restart: true },
       ],

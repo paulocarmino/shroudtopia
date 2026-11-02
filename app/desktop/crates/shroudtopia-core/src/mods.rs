@@ -117,7 +117,7 @@ pub const CATALOG: &[KnownMod] = &[
         key: "max-stack",
         dll: "max-stack/mod.json",
         name: "Max Stack",
-        sub: "Itens empilham 5× mais, até 999",
+        sub: "Itens empilham até 999",
         options: &[],
         eml: Some("max-stack"),
         panel: None,

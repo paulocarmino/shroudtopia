@@ -1,11 +1,10 @@
 -- Max Stack 1.0.0 (Nexus, "Enshrouded Mods", MIT) with its options fixed for Shroudtopia: no items.txt, and
 -- config.txt holds only `enabled=true|false`, written by the app's toggle (missing means on). Read at game start.
--- An item that stacks in vanilla stacks 5x as much, up to 999. An item that already stacks more than that keeps its
--- vanilla size (the original lowered it to 999). Items that do not stack (weapons, armour...) are left alone.
+-- An item that stacks in vanilla stacks 999. An item that already stacks more than that keeps its vanilla size (the
+-- original lowered it to 999). Items that do not stack (weapons, armour...) are left alone.
 -- Runs on EML (dbghelp.dll), not on the Shroudtopia loader, which skips this folder (no DLL in it).
 
-local MAX_STACK_SIZE = 999
-local STACK_MULTIPLIER = 5.0
+local STACK_SIZE = 999
 
 local function enabled()
     -- EML raises an error for a missing file rather than returning nil
@@ -19,8 +18,7 @@ local function computeStackSize(vanillaSize)
     if vanillaSize <= 1 then
         return vanillaSize
     end
-    local multiplied = math.floor(vanillaSize * STACK_MULTIPLIER + 0.5)
-    return math.max(vanillaSize, math.min(MAX_STACK_SIZE, multiplied))
+    return math.max(vanillaSize, STACK_SIZE)
 end
 
 local function patchItemStacks()
@@ -58,7 +56,7 @@ local function patchItemStacks()
 end
 
 if enabled() then
-    print(string.format("[max-stack] Loading (x%s, up to %d, never below vanilla)", tostring(STACK_MULTIPLIER), MAX_STACK_SIZE))
+    print(string.format("[max-stack] Loading (%d, never below vanilla)", STACK_SIZE))
     local changed, total = patchItemStacks()
     print(string.format("[max-stack] items=%d changed=%d unchanged=%d", total, changed, total - changed))
 else
